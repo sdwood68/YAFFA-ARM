@@ -58,8 +58,8 @@ void _do_sys(void) {
 const char loop_sys_str[] = "loop-sys";
 // ( n1|u1 n2|u2 -- ) (R: -- loop_sys )
 // Set up loop control parameters with index n2|u2 and limit n1|u1. An ambiguous
-// condition exists if n1|u1 and n2|u2 are not the same type. Anything already 
-// on the return stack becomes unavailable until the loop-control parameters 
+// condition exists if n1|u1 and n2|u2 are not the same type. Anything already
+// on the return stack becomes unavailable until the loop-control parameters
 // are discarded.
 void _loop_sys(void) {
   cell_t limit = rPop();    // fetch limit
@@ -81,8 +81,8 @@ void _loop_sys(void) {
 
 const char leave_sys_str[] = "leave-sys";
 // ( -- ) (R: loop-sys -- )
-// Discard the current loop control parameters. An ambiguous condition exists 
-// if they are unavailable. Continue execution immediately following the 
+// Discard the current loop control parameters. An ambiguous condition exists
+// if they are unavailable. Continue execution immediately following the
 // innermost syntactically enclosing DO ... LOOP or DO ... +LOOP.
 void _leave_sys(void) {
   rPop();    // fetch limit
@@ -98,8 +98,8 @@ void _leave_sys(void) {
 const char plus_loop_sys_str[] = "plus_loop-sys";
 // ( n1|u1 n2|u2 -- ) (R: -- loop_sys )
 // Set up loop control parameters with index n2|u2 and limit n1|u1. An ambiguous
-// condition exists if n1|u1 and n2|u2 are not the same type. Anything already 
-// on the return stack becomes unavailable until the loop-control parameters 
+// condition exists if n1|u1 and n2|u2 are not the same type. Anything already
+// on the return stack becomes unavailable until the loop-control parameters
 // are discarded.
 void _plus_loop_sys(void) {
   cell_t limit = rPop();    // fetch limit
@@ -137,7 +137,7 @@ const char number_sign_str[] = "#";
 // pictured numeric output string.
 void _number_sign(void) { 
   udcell_t ud;
-  ud = (udcell_t)pop()<<sizeof(ucell_t) * 8;
+  ud = (udcell_t)pop() << sizeof(ucell_t) * 8;
   ud += (udcell_t)pop();
   *--pPNO = charset[ud % base];
   ud /= base;
@@ -147,8 +147,8 @@ void _number_sign(void) {
 
 const char number_sign_gt_str[] = "#>";
 // ( xd -- c-addr u)
-// Drop xd. Make the pictured numeric output string available as a character 
-// string c-addr and u specify the resulting string. A program may replace 
+// Drop xd. Make the pictured numeric output string available as a character
+// string c-addr and u specify the resulting string. A program may replace
 // characters within the string.
 void _number_sign_gt(void) {
   _two_drop();
@@ -437,7 +437,6 @@ void _two_fetch(void) {
   cell_t* address = (cell_t*)pop();
   cell_t value = *address++;
   push(value);
-//  address += sizeof(cell_t);
   value = *address;
   push(value);
 }
@@ -559,8 +558,54 @@ void _to_in(void) {
 
 const char to_number_str[] = ">number";
 // ( ud1 c-addr1 u1 -- ud2 c-addr u2 )
+// ud2 is the unsigned result of converting the characters within the string
+// specified by c-addr1 u1 into digits, using the number in BASE, and adding
+// each into ud1 after multiplying ud1 by the number in BASE.  Conversion
+// continues left-to-right until a character that is not convertible,
+// including any “+” or “-”, is encountered or the string is entirely
+// converted.  c-addr2 is the location of the first unconverted character or
+// the first character past the end of the string if the string was entirely
+// converted.  u2 is the number of unconverted characters in the string.  An
+// ambiguous condition exists if ud2 overflows during the conversion.
 void _to_number(void) {
-  Serial.print(not_done_str); 
+  uint8_t len;
+  char* ptr;
+  cell_t accum;
+
+  unsigned char negate = 0;                  // flag if number is negative
+  len = (uint8_t)pop();
+  ptr = (char*)pop();
+  accum = pop();
+  
+  // Look at the initial character, handling either '-', '$', or '%'
+  switch (*ptr) {
+    case '$':  base = HEXIDECIMAL; goto SKIP;
+    case '%':  base = BINARY; goto SKIP;
+    case '#':  base = DECIMAL; goto SKIP;
+    case '+':  negate = 0; goto SKIP;
+    case '-':  negate = 1;
+SKIP:                // common code to skip initial character
+    ptr++;
+    break;
+  }
+  // Iterate over rest of string, and if rest of digits are in
+  // the valid set of characters, accumulate them.  If any
+  // invalid characters found, abort and return 0.
+  while (len < 0) {
+    char* pos = strchr(charset, (int)tolower(*ptr));
+    cell_t offset = pos - charset;
+    if ((offset < base) && (offset > -1))  
+      accum = (accum * base) + (pos - charset);
+    else {
+      break;           // exit, We hit a non number
+    }
+    ptr++;
+    len--;
+  }
+  if (negate) accum = ~accum + 1;     // apply sign, if necessary
+  push(accum); // Push the resultant number
+  push((size_t)ptr); // Push the last convertered caharacter
+  push(len); // push the remading length of unresolved charaters
 }
 
 const char to_r_str[] = ">r";
@@ -585,8 +630,7 @@ const char fetch_str[] = "@";
 // Fetch cell x1 at a-addr.
 void _fetch(void) {
   cell_t* address = (cell_t*)pop();
-  cell_t value = *address;
-  push(value);
+  push(*address);
 }
 
 const char abort_str[] = "abort";
@@ -604,7 +648,7 @@ const char abort_quote_str[] = "abort\x22";
 // Parse ccc delimited by a ". Append the run-time semantics given below to the
 // current definition.
 // Runt-Time: (i*x x1 -- | i*x ) (R: j*x -- |j*x )
-// Remove x1 from the stack. If any bit of x1 is not zero, display ccc and
+// Remove x1 from the stack. If any bit of x1 is not zero, display ccc and 
 // preform an implementation-defined abort sequence that included the function
 // of ABORT.
 void _abort_quote(void) {
@@ -739,9 +783,10 @@ const char char_str[] = "char";
 // ( "<spaces>name" -- char )
 // Skip leading space delimiters. Parse name delimited by a space. Put the value
 // of its first character onto the stack.
-static void _char(void) {
-  if (getToken()) push(cTokenBuffer[0]);
-  else {
+void _char(void) {
+  if(getToken()) {
+    push(cTokenBuffer[0]);
+  } else {
     push(-16);
     _throw();
   }
@@ -776,8 +821,9 @@ const char count_str[] = "count";
 // string at c-addr2.
 void _count(void) {
   uint8_t* addr = (uint8_t*)pop();
-  push(*(addr + 1));
-  push(size_t(addr + 1));
+  cell_t value = *addr++;
+  push((size_t)addr);
+  push(value);
 }
 
 const char cr_str[] = "cr";
@@ -866,6 +912,7 @@ const char else_str[] = "else";
 void _else(void) {
   cell_t* orig = (cell_t*)pop();
   *pHere++ = JUMP_IDX;
+//  push((size_t)pHere); // Which is correct?
   push((size_t)pHere++);
   *orig = (size_t)pHere - (size_t)orig;
 }
@@ -1573,7 +1620,7 @@ const char while_str[] = "while";
 // Interpretation: Undefine
 // Compilation: (C: dest -- orig dest )
 // Run-Time: ( x -- )
-void _while (void) {
+void _while(void) {
   ucell_t dest;
   ucell_t orig;
   dest = pop();
@@ -1686,9 +1733,103 @@ void _right_bracket(void) {
 /**                          Core Extension Set                               **/
 /*******************************************************************************/
 #ifdef CORE_EXT_SET
+const char dot_paren_str[] = ".(";
+// ( "ccc<paren>" -- )
+// Parse and display ccc delimitied by ) (right parenthesis). ,( is an imedeate
+// word
+void _dot_paren(void) { 
+  push(')');
+  _word();
+  _count();
+  _type();
+}
+
+const char zero_not_equal_str[] = "0<>";
+// ( x -- flag)
+// flag is true if and only if x is not equal to zero. 
+void _zero_not_equal(void) { 
+  w = pop();
+  if (w == 0) push(FALSE);
+  else push(TRUE);
+}
+
+const char zero_greater_str[] = "0>";
+// (n -- flag)
+// flag is true if and only if n is greater than zero.
+void _zero_greater(void) {
+  w = pop();
+  if (w > 0) push(TRUE);
+  else push(FALSE);
+}
+
+const char two_to_r_str[] = "2>r";
+// Interpretation: Interpretation semantics for this word are undefined. 
+// Execution: ( x1 x2 -- ) ( R:  -- x1 x2 )
+// Transfer cell pair x1 x2 to the return stack.  Semantically equivalent
+// to SWAP >R >R.
+void _two_to_r(void) {
+  _swap();
+  _to_r();
+  _to_r();
+}
+
+const char two_r_from_str[] = "2r>";
+// Interpretation: Interpretation semantics for this word are undefined. 
+// Execution: ( -- x1 x2 )  ( R:  x1 x2 -- ) 
+// Transfer cell pair x1 x2 from the return stack.  Semantically equivalent to
+// R> R> SWAP. 
+void _two_r_from(void) {
+  _r_from();
+  _r_from();
+  _swap();
+}
+
+const char two_r_fetch_str[] = "2r@";
+// Interpretation: Interpretation semantics for this word are undefined. 
+// Execution: ( -- x1 x2 )  ( R:  x1 x2 -- x1 x2 ) 
+// Copy cell pair x1 x2 from the return stack.  Semantically equivalent to
+// R> R> 2DUP >R >R SWAP. 
+void _two_r_fetch(void) {
+  _r_from();
+  _r_from();
+  _two_dup();
+  _to_r();
+  _to_r();
+  _swap();
+}
+
+const char colon_noname_str[] = ":noname";
+// ( C:  -- colon-sys )  ( S:  -- xt )
+// Create an execution token xt, enter compilation state and start the current
+// definition, producing colon-sys.  Append the initiation semantics given 
+// below to the current definition. 
+// The execution semantics of xt will be determined by the words compiled into
+// the body of the definition.  This definition can be executed later by using
+// xt EXECUTE.
+// If the control-flow stack is implemented using the data stack, colon-sys 
+// shall be the topmost item on the data stack.  See 3.2.3.2 Control-flow stack.
+//
+// Initiation: ( i*x -- i*x )  ( R:  -- nest-sys )
+// Save implementation-dependent information nest-sys about the calling 
+// definition.  The stack effects i*x represent arguments to xt. 
+//
+// xt Execution: ( i*x -- j*x )
+// Execute the definition specified by xt.  The stack effects i*x and j*x 
+// represent arguments to and results from xt, respectively.  
+//void _colon_noname(void) {
+//  state = TRUE;
+//  push(COLON_SYS);
+//  openEntry();
+//}
+
 const char neq_str[] = "<>";
+// (x1 x2 -- flag)
+// flag is true if and only if x1 is not bit-for-bit the same as x2.
 void _neq(void) {
-  push(pop() != pop());
+  cell_t x2 = pop();
+  cell_t x1 = pop();
+  if (x1 != x2) push(TRUE);
+  else push(FALSE); 
 }
 
 const char hex_str[] = "hex";
@@ -1697,6 +1838,103 @@ const char hex_str[] = "hex";
 void _hex(void) { // value --
   base = HEX;
 }
+
+const char case_str[] = "case";
+// Contributed by Craig Lindley
+// Interpretation semantics for this word are undefined.
+// Compilation: ( C: -- case-sys )
+// Mark the start of the CASE ... OF ... ENDOF ... ENDCASE structure. Append the run-time
+// semantics given below to the current definition.
+// Run-time: ( -- )
+// Continue execution.
+static void _case(void) {
+  push(CASE_SYS);
+  push(0); // Count of of clauses
+}
+
+const char of_str[] = "of";
+// Contributed by Craig Lindley
+// Interpretation semantics for this word are undefined.
+// Compilation: ( C: -- of-sys )
+// Put of-sys onto the control flow stack. Append the run-time semantics given below to
+// the current definition. The semantics are incomplete until resolved by a consumer of
+// of-sys such as ENDOF.
+// Run-time: ( x1 x2 -- | x1 )
+// If the two values on the stack are not equal, discard the top value and continue execution
+// at the location specified by the consumer of of-sys, e.g., following the next ENDOF.
+// Otherwise, discard both values and continue execution in line.
+static void _of(void) {
+  push(pop() + 1);      // Increment count of of clauses
+  rPush(pop());         // Move to return stack
+
+  push(OF_SYS);
+  *pHere++ = OVER_IDX;  // Postpone over
+  *pHere++ = EQUAL_IDX; // Postpone =
+  *pHere++ = ZJUMP_IDX; // If
+  *pHere = 0;           // Filled in by endof
+  push((size_t) pHere++);// Push address of jump address onto control stack
+  push(rPop());         // Bring of count back
+}
+
+const char endof_str[] = "endof";
+// Contributed by Craig Lindley
+// Interpretation semantics for this word are undefined.
+// Compilation: ( C: case-sys1 of-sys -- case-sys2 )
+// Mark the end of the OF ... ENDOF part of the CASE structure. The next location for a
+// transfer of control resolves the reference given by of-sys. Append the run-time semantics
+// given below to the current definition. Replace case-sys1 with case-sys2 on the
+// control-flow stack, to be resolved by ENDCASE.
+// Run-time: ( -- )
+// Continue execution at the location specified by the consumer of case-sys2.
+static void _endof(void) {
+  cell_t *back, *forward;
+
+  rPush(pop());         // Move of count to return stack
+
+  // Prepare jump to endcase
+  *pHere++ = JUMP_IDX;
+  *pHere = 0;
+  forward = pHere++;
+
+  back = (cell_t*) pop(); // Resolve If from of
+  *back = (size_t) pHere - (size_t) back;
+
+  if (pop() != OF_SYS) { // Make sure control structure is consistent
+    push(-22);
+    _throw();
+    return;
+  }
+  // Place forward jump address onto control stack
+  push((cell_t) forward);
+  push(rPop());          // Bring of count back
+}
+
+const char endcase_str[] = "endcase";
+// Contributed by Craig Lindley
+// Interpretation semantics for this word are undefined.
+// Compilation: ( C: case-sys -- )
+// Mark the end of the CASE ... OF ... ENDOF ... ENDCASE structure. Use case-sys to resolve
+// the entire structure. Append the run-time semantics given below to the current definition.
+// Run-time: ( x -- )
+// Discard the case selector x and continue execution.
+static void _endcase(void) {
+  cell_t *orig;
+
+  // Resolve all of the jumps from of statements to here
+  int count = pop();
+  for (int i = 0; i < count; i++) {
+    orig = (cell_t *) pop();
+    *orig = (size_t) pHere - (size_t) orig;
+  }
+
+  *pHere++ = DROP_IDX;      // Postpone drop of case selector
+
+  if (pop() != CASE_SYS) {  // Make sure control structure is consistent
+    push(-22);
+    _throw();
+  }
+}
+
 #endif
 
 /*******************************************************************************/
@@ -1718,7 +1956,7 @@ void _throw(void) {
   errorCode = pop();
   uint8_t index = 0;
   int tableCode;
-  _cr();
+  //_cr();
   Serial.print(cTokenBuffer);
   Serial.print(F(" EXCEPTION("));
   do {
@@ -1734,7 +1972,25 @@ void _throw(void) {
   tos = -1;                       // Clear the stack.
   _quit();
   state = FALSE;
-} 
+}  
+#endif
+
+/*******************************************************************************/
+/**                             Facility Set                                  **/
+/*******************************************************************************/
+#ifdef FACILITY_SET
+/*
+ * Contributed by Andrew Holt
+ */
+const char key_question_str[] = "key?";
+void _key_question(void) {
+    
+    if( Serial.available() > 0) {
+        push(TRUE);
+    } else {
+        push(FALSE);
+    }
+}
 #endif
 
 /*******************************************************************************/
@@ -1794,9 +2050,11 @@ void _dump(void) {
     Serial.print(tab_str);
     addr -= 16;
     for (uint8_t i = 0; i < 16; i++) {
-      if (*addr < 127 && *addr > 31)
+      if (*addr < 127 && *addr > 31) {
         Serial.print((char)*addr);
-      else Serial.print(".");
+      } else {
+        Serial.print(".");
+      }
       addr++;
     }
   }
@@ -1856,6 +2114,7 @@ void _see(void) {
       done = ((*addr++ == 1) && (! isLiteral));
     } while (! done);
   }
+  Serial.println();
 }
 
 const char words_str[] = "words";
@@ -1929,6 +2188,10 @@ void _eeprom_write(void) {             // value address --
 /**                      Arduino Library Operations                            **/
 /********************************************************************************/
 #ifdef EN_ARDUINO_OPS
+const char freeMem_str[] = "freeMem";
+void _freeMem(void) { 
+  push(freeMem());
+}
 
 const char delay_str[] = "delay";
 void _delay(void) {
@@ -1998,6 +2261,9 @@ const flashEntry_t flashDict[] = {
   { s_quote_str,        _s_quote,         IMMEDIATE + COMP_ONLY },
   { dot_quote_str,      _dot_quote,       IMMEDIATE + COMP_ONLY },
   { variable_str,       _variable,        NORMAL },
+  { over_str,           _over,            NORMAL }, // CAL
+  { eq_str,             _eq,              NORMAL }, // CAL
+  { drop_str,           _drop,            NORMAL }, // CAL
 
   /*****************************************************/
   /* Order does not matter after here                  */
@@ -2131,14 +2397,28 @@ const flashEntry_t flashDict[] = {
   { right_bracket_str,  _right_bracket,   NORMAL },
 
 #ifdef CORE_EXT_SET
+  { dot_paren_str,      _dot_paren,       IMMEDIATE },
+  { zero_not_equal_str, _zero_not_equal,  NORMAL },
+  { zero_greater_str,   _zero_greater,    NORMAL },
+  { two_to_r_str,       _two_to_r,        NORMAL },
+  { two_r_from_str,     _two_r_from,      NORMAL },
+  { two_r_fetch_str,    _two_r_fetch,     NORMAL },
   { neq_str,            _neq,             NORMAL },
   { hex_str,            _hex,             NORMAL },
+  { case_str,           _case,            IMMEDIATE + COMP_ONLY },    // CAL
+  { of_str,             _of,              IMMEDIATE + COMP_ONLY },    // CAL
+  { endof_str,          _endof,           IMMEDIATE + COMP_ONLY },    // CAL
+  { endcase_str,        _endcase,         IMMEDIATE + COMP_ONLY },    // CAL
 #endif
 
 #ifdef DOUBLE_SET
 #endif
 
 #ifdef EXCEPTION_SET
+#endif
+
+#ifdef FACILITY_SET
+  { key_question_str,   _key_question,    NORMAL },
 #endif
 
 #ifdef LOCALS_SET
@@ -2161,6 +2441,7 @@ const flashEntry_t flashDict[] = {
 #endif
 
 #ifdef EN_ARDUINO_OPS
+  { freeMem_str,        _freeMem,         NORMAL },
   { delay_str,          _delay,           NORMAL },
   { pinWrite_str,       _pinWrite,        NORMAL },
   { pinMode_str,        _pinMode,         NORMAL },
@@ -2177,4 +2458,5 @@ const flashEntry_t flashDict[] = {
 
   { NULL,           NULL,    NORMAL }
 };
+
 

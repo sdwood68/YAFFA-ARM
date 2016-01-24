@@ -38,6 +38,8 @@
 /**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    - Added words ">NUMBER", "KEY?", ".(", "0<>", "0>", "2>R", "2R>",     **/
+/**      "2R@".                                                              **/
 /**    - Removed static from the function headers to avoid compilation       **/
 /**      errors with the new 1.6.6 Arduino IDE.                              **/
 /**    - changed file names from yaffa.h to YAFFA.h and Yaffa.ino to         **/
@@ -80,7 +82,6 @@
 
 #include "YAFFA.h"
 #include "Error_Codes.h"
-//#include <EEPROM.h>
 
 /******************************************************************************/
 /** Major and minor revision numbers                                         **/
@@ -104,13 +105,14 @@ const char sp_str[] = " ";
 const char tab_str[] = "\t";
 const char hexidecimal_str[] = "$";
 const char octal_str[] = "0";
-
 const char binary_str[] = "%";
 const char zero_str[] = "0";
 
 /******************************************************************************/
 /** Global Variables                                                         **/
 /******************************************************************************/
+//forthSpace_t fs;  // Creates the forth space structure
+
 /******************************************************************************/
 /**  Text Buffers and Associated Registers                                   **/
 /******************************************************************************/
@@ -122,7 +124,7 @@ char* cpToIn;                   // Points to a position in the source string
                                 // that was the last character to be parsed
 char cDelimiter = ' ';          // The parsers delimiter
 char cInputBuffer[BUFFER_SIZE]; // Input Buffer that gets parsed
-char cTokenBuffer[TOKEN_SIZE];  // Stores Single Parsed token to be acted on
+char cTokenBuffer[WORD_SIZE];  // Stores Single Parsed token to be acted on
 
 /******************************************************************************/
 /**  Stacks and Associated Registers                                         **/
@@ -258,30 +260,24 @@ void setup(void) {
   Serial.print("\r\n Input Buffer: Size ");
   Serial.print(BUFFER_SIZE);
   Serial.print(" Bytes, Starts at $");
-  Serial.print((int)&cInputBuffer[0], HEX);
+  Serial.print((size_t)cInputBuffer[0], HEX);
   Serial.print(", Ends at $");
-  Serial.println((int)&cInputBuffer[BUFFER_SIZE] - 1, HEX);
+  Serial.println((size_t)cInputBuffer[BUFFER_SIZE] - 1, HEX);
 
   Serial.print(" Token Buffer: Size ");
-  Serial.print(TOKEN_SIZE);
+  Serial.print(WORD_SIZE);
   Serial.print(" Bytes, Starts at $");
-  Serial.print((int)&cTokenBuffer[0], HEX);
+  Serial.print((size_t)&cTokenBuffer[0], HEX);
   Serial.print(", Ends at $");
-  Serial.println((int)&cTokenBuffer[TOKEN_SIZE] - 1, HEX);
+  Serial.println((size_t)&cTokenBuffer[WORD_SIZE] - 1, HEX);
 
   Serial.print(" Forth Space: Size ");
   Serial.print(FORTH_SIZE);
   Serial.print(" Cells, Starts at $");
-  Serial.print((int)&forthSpace[0], HEX);
+  Serial.print((size_t)&forthSpace[0], HEX);
   Serial.print(", Ends at $");
-  Serial.println((int)&forthSpace[FORTH_SIZE] - 1, HEX);
+  Serial.println((size_t)&forthSpace[FORTH_SIZE] - 1, HEX);
 
-  mem = freeMem();
-  Serial.print(sp_str);
-  Serial.print(mem);
-  Serial.print(" ($");
-  Serial.print(mem, HEX);  
-  Serial.print(") bytes free\r\n");
   Serial.print(prompt_str);
 }
 
@@ -293,13 +289,16 @@ void loop(void) {
   cpSourceEnd = cpSource + getLine(cpSource, BUFFER_SIZE);
   if (cpSourceEnd > cpSource) {
     interpreter();
-    if (errorCode) errorCode = 0;
-    else {
+    if (errorCode) {
+        errorCode = 0;
+    } else {
       if (!state) {
         Serial.print(ok_str);
         // This shows a DOT for each item on the data stack
         char i = tos + 1;
-        while (i--) Serial.print(".");
+        while(i--) {
+            Serial.print(".");
+        }
         Serial.println();
       }
     }
@@ -392,7 +391,7 @@ uint8_t getToken(void) {
       cpToIn++;
       if (tokenIdx) return tokenIdx;
     } else {
-      if (tokenIdx < (TOKEN_SIZE - 1)) {
+      if (tokenIdx < (WORD_SIZE - 1)) {
         cTokenBuffer[tokenIdx++] = *cpToIn++;
       }
     }
@@ -450,6 +449,7 @@ void interpreter(void) {
           _throw();
           return;
         }
+
         if (w > 255) {
           rPush(0);                  // Push 0 as our return address
           ip = (cell_t *)w;          // set the ip to the XT (memory location)
@@ -505,14 +505,12 @@ void executeWord(void) {
 /******************************************************************************/
 uint8_t isWord(char* addr) {
   uint8_t index = 0;
-  uint8_t length = 0;
 
   pUserEntry = pLastUserEntry;
   // First search through the user dictionary
   while (pUserEntry) {
     if (strcmp(pUserEntry->name, addr) == 0) {
       wordFlags = pUserEntry->flags;
-      length = strlen(pUserEntry->name);
       w = (size_t)pUserEntry->cfa;
       return 1;
     }
@@ -580,19 +578,6 @@ SKIP:                // common code to skip initial character
   push(number);
   base = tempBase;
   return 1;
-}
-
-/******************************************************************************/
-/** freeHeap returns the amount of free heap remaining.                      **/
-/******************************************************************************/
-unsigned int freeHeap(void) {
-  extern void *__bss_end;
-  extern void *__brkval;
-  int16_t dummy;
-  if ((int)__brkval == 0) {
-    return ((int)&dummy - (int)&__bss_end);
-  }
-  return ((int)&dummy - (int)__brkval);
 }
 
 /******************************************************************************/
@@ -712,7 +697,7 @@ void displayValue(void) {
       Serial.print(hexidecimal_str); 
       Serial.print(w, HEX);
       break;
-    case OCTAL:  
+    case OCTAL:
       Serial.print(octal_str); 
       Serial.print(w, OCT);
       break;
@@ -745,4 +730,5 @@ char* xtToName(cell_t xt) {
   }
   return 0;
 }
+
 
