@@ -111,15 +111,17 @@ static const unsigned long FORTH_SIZE    ((SRAM_SIZE*1024*2)/(sizeof(cell_t)*3))
 /**                       Enable Dictionary Word Sets                         **/
 /*******************************************************************************/
 #define CORE_EXT_SET
-#define DOUBLE_SET
+//#define DOUBLE_SET
 #define EXCEPTION_SET
-#define LOCALS_SET
-#define MEMORY_SET
-#define FACILITY_SET
+//#define LOCALS_SET
+//#define MEMORY_SET
 #define TOOLS_SET
-#define SEARCH_SET
-#define STRING_SET
+//#define SEARCH_SET
+//#define STRING_SET
 #define EN_ARDUINO_OPS
+#if defined(ARDUINO_ARCH_AVR)
+#define EN_EEPROM_OPS
+#endif
 
 /******************************************************************************/
 /**  Numbering system                                                        **/
@@ -169,7 +171,7 @@ static const unsigned long FORTH_SIZE    ((SRAM_SIZE*1024*2)/(sizeof(cell_t)*3))
 #define CASE_SYS     -3
 #define OF_SYS       -4
 #define LOOP_SYS     -5
-#define LEAVE_SYS    -6
+
 
 /******************************************************************************/
 /**  User Dictionary Header                                                  **/
@@ -177,8 +179,7 @@ static const unsigned long FORTH_SIZE    ((SRAM_SIZE*1024*2)/(sizeof(cell_t)*3))
 typedef struct  {            // structure of the user dictionary
   void*        prevEntry;    // Pointer to the previous entry
   cell_t*      cfa;          // Code Field Address
-  uint8_t      flags;        // Holds the length of the following name 
-                             // and any flags.
+  uint8_t      flags;        // Holds the length of the following name and flags
   char         name[];       // Variable length name
 } userEntry_t;
 
@@ -193,16 +194,7 @@ typedef struct  {                   // Structure of the dictionary
   const uint8_t  flags;             // Holds word type flags
 } flashEntry_t;
 
-extern const flashEntry_t flashDict[];        // forward reference
-
-/******************************************************************************/
-/**  Stack Structure.                                                        **/
-/******************************************************************************/
-typedef struct {
-  uint8_t       top;                      // The data stack index
-  cell_t        d[STACK_SIZE];            // The data stack
-  const uint8_t size = STACK_SIZE;
-} stack_t;
+extern const PROGMEM flashEntry_t flashDict[];        // forward reference
 
 /******************************************************************************/
 /**  Flash Dictionary Index References                                       **/

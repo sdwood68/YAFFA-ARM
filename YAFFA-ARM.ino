@@ -1,6 +1,6 @@
 /******************************************************************************/
 /**  YAFFA - Yet Another Forth for Arduino                                   **/
-/**  Version 0.6.2                                                           **/
+/**  Version 0.7.0                                                           **/
 /**                                                                          **/
 /**  File: YAFFA.ino                                                         **/
 /**  Copyright (C) 2012 Stuart Wood (swood@rochester.rr.com)                 **/
@@ -38,6 +38,9 @@
 /**                                                                          **/
 /**  REVISION HISTORY:                                                       **/
 /**                                                                          **/
+/**    0.7.0                                                                **/
+/**    - Fixed the how LEAVE is handled in LOOP and +LOOP.                   **/
+/**    0.6.2                                                                 **/
 /**    - Added words ">NUMBER", "KEY?", ".(", "0<>", "0>", "2>R", "2R>",     **/
 /**      "2R@".                                                              **/
 /**    - Removed static from the function headers to avoid compilation       **/
@@ -87,7 +90,7 @@
 /** Major and minor revision numbers                                         **/
 /******************************************************************************/
 #define YAFFA_MAJOR 0
-#define YAFFA_MINOR 6
+#define YAFFA_MINOR 7
 #define MAKESTR(a) #a
 #define MAKEVER(a, b) MAKESTR(a*256+b)
 asm(" .section .version\n"
@@ -134,11 +137,14 @@ char cTokenBuffer[WORD_SIZE];  // Stores Single Parsed token to be acted on
 /**  is not corrupted, i.e. the same number of items are on the stack as     **/
 /**  at the end of the colon-sys as before it is started.                    **/
 /******************************************************************************/
-int8_t tos = -1;                        // The data stack index
-int8_t rtos = -1;                       // The return stack index
-cell_t stack[STACK_SIZE];               // The data stack
-cell_t rStack[RSTACK_SIZE];             // The return stack
-
+//int8_t tos = -1;                        // The data stack index
+//int8_t rtos = -1;                       // The return stack index
+//cell_t stack[STACK_SIZE];               // The data stack
+//cell_t rStack[RSTACK_SIZE];             // The return stack
+stack_t dStack;
+stack_t rStack;
+//Stack<cell_t> dStack = Stack<cell_t>(STACK_SIZE);
+//Stack<cell_t> rStack = Stack<cell_t>(RSTACK_SIZE);
 /******************************************************************************/
 /**  Flash Dictionary Structure                                              **/
 /******************************************************************************/
@@ -295,7 +301,7 @@ void loop(void) {
       if (!state) {
         Serial.print(ok_str);
         // This shows a DOT for each item on the data stack
-        char i = tos + 1;
+        char i = dStack_size();
         while(i--) {
             Serial.print(".");
         }
@@ -420,7 +426,7 @@ void interpreter(void) {
       if (isWord(cTokenBuffer)) {
         if (wordFlags & IMMEDIATE) {
           if (w > 255) {
-            rPush(0);            // Push 0 as our return address
+            rStack_push(0);            // Push 0 as our return address
             ip = (cell_t *)w;    // set the ip to the XT (memory location)
             executeWord();
           } else {
@@ -435,7 +441,7 @@ void interpreter(void) {
       } else if (isNumber(cTokenBuffer)) {
         _literal();
       } else {
-        push(-13);
+        dStack_push(-13);
         _throw();
       }
     } else {
@@ -445,13 +451,13 @@ void interpreter(void) {
       /************************/
       if (isWord(cTokenBuffer)) {
         if (wordFlags & COMP_ONLY) {
-          push(-14);
+          dStack_push(-14);
           _throw();
           return;
         }
 
         if (w > 255) {
-          rPush(0);                  // Push 0 as our return address
+          rStack_push(0);                  // Push 0 as our return address
           ip = (cell_t *)w;          // set the ip to the XT (memory location)
           executeWord();
           if (errorCode) return;
@@ -463,7 +469,7 @@ void interpreter(void) {
       } else if (isNumber(cTokenBuffer)) {
 // Is something supposed to be here?        
       } else {
-        push(-13);
+        dStack_push(-13);
         _throw();
         return;
       }
@@ -482,7 +488,7 @@ void executeWord(void) {
     w = *ip++;
     if (w > 255) {
       // ip is an address in code space
-      rPush((size_t)ip);        // push the address to return to
+      rStack_push((size_t)ip); // push the address to return to
       ip = (cell_t*)w;          // set the ip to the new address
     }
     else {
@@ -575,7 +581,7 @@ SKIP:                // common code to skip initial character
     subString++;
   }
   if (negate) number = ~number + 1;     // apply sign, if necessary
-  push(number);
+  dStack_push(number);
   base = tempBase;
   return 1;
 }
@@ -599,7 +605,7 @@ void openEntry(void) {
     pNewUserEntry->prevEntry = 0;              // Initialize User Dictionary
   else pNewUserEntry->prevEntry = pLastUserEntry;
   if (!getToken()) {
-    push(-16);
+   dStack_push(-16);
     _throw();
   }
   char* ptr = pNewUserEntry->name;
@@ -636,53 +642,140 @@ void closeEntry(void) {
 /**   nesting, do-loop execution, temporary storage, and other purposes.     **/
 /******************************************************************************/
 /*********************************************/
-/** Push (place) a cell onto the data stack **/
+/** Push (place) a cell onto the stack      **/
 /*********************************************/
-void push(cell_t value) {
-  if (tos < STACK_SIZE - 1) {
-    stack[++tos] = value;
+void dStack_push(cell_t value) {
+  if (dStack.top < dStack.size) {
+    dStack.d[++dStack.top] = value;
   } else {
-    stack[tos] = -3;
+    dStack.d[dStack.top] = -3;
     _throw();
   }
 }
 
-/***********************************************/
-/** Push (place) a cell onto the retrun stack **/
-/***********************************************/
-void rPush(cell_t value) {
-  if (rtos < RSTACK_SIZE - 1) {
-    rStack[++rtos] = value;
+void rStack_push(cell_t value) {
+  if (rStack.top < rStack.size) {
+    rStack.d[++rStack.top] = value;
   } else {
-    push(-5);
+    dStack_push(-5);
     _throw();
   }
 }
 
 /*********************************************/
-/** Pop (remove) a cell onto the data stack **/
+/** Pop (remove) a cell from the stack      **/
 /*********************************************/
-cell_t pop(void) {
-  if (tos > -1) {
-    return (stack[tos--]);
+cell_t dStack_pop(void) {
+  if (dStack.top > 0) {
+    return (dStack.d[dStack.top--]);
   } else {
-    push(-4);
+    dStack_push(-4);
     _throw();
   }
   return 0;
 }
 
-/***********************************************/
-/** Pop (remove) a cell onto the return stack **/
-/***********************************************/
-cell_t rPop(void) {
-  if (rtos > -1) {
-    return (rStack[rtos--]);
+cell_t rStack_pop(void) {
+  if (rStack.top > 0) {
+    return (rStack.d[rStack.top--]);
   } else {
-    push(-6);
+    dStack_push(-6);
     _throw();
   }
   return 0;
+}
+
+/*********************************************/
+/** Peek - copy the cell value from the Nth **/
+/** position down from the top of the data  **/
+/** stack. N = 0 is the top of the stack.   **/
+/*********************************************/
+cell_t dStack_peek(int n) {
+  // Error Check: Make sure the depth doesn't
+  // exceed the number of elements
+  if (n < dStack.top) {
+    return dStack.d[dStack.top - (n)];
+  } else {
+    Serial.println("Error: Depth too large!");
+  }
+  return 0;
+}
+
+cell_t rStack_peek(int n) {
+  // Error Check: Make sure the depth doesn't
+  // exceed the number of elements
+  if (n < rStack.top) {
+    return rStack.d[rStack.top - (n)];
+  } else {
+    Serial.println("Error: Depth too large!");
+  }
+  return 0;
+}
+
+/*********************************************/
+/** isFull - return the true if the stack   **/
+/** is full.                                **/
+/*********************************************/ 
+bool dStack_isFull(void) {
+  if (dStack.top == dStack.size) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool rStack_isFull(void) {
+  if (rStack.top == rStack.size) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+/*********************************************/
+/** isEmpty - return the true if the stack  **/
+/** is empty.                               **/
+/*********************************************/ 
+bool dStack_isEmpty(void) {
+  if (dStack.top == 0) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool rStack_isEmpty(void) {
+  if (rStack.top == 0) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+/*********************************************/
+/** size - return the number items on the   **/
+/** stack.                                  **/
+/*********************************************/ 
+uint8_t dStack_size(void) {
+  return dStack.top;
+}
+
+uint8_t rStack_size(void) {
+  return dStack.top;
+}
+
+/*********************************************/
+/** clear - removes everything fromt the    **/
+/** stack.                                  **/
+/*********************************************/ 
+void dStack_clear(void) {
+  dStack.top = 0;
+  dStack.d[0] = 0;
+}
+
+void rStack_clear(void) {
+  dStack.top = 0;
+  dStack.d[0] = 0;
 }
 
 /******************************************************************************/

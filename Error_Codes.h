@@ -83,6 +83,9 @@
 /**  -57 exception in sending or receiving a character                       **/
 /**  -58 [IF], [ELSE], or [THEN] exception                                   **/
 
+#ifndef __ERROR_CODES_H__
+#define __ERROR_CODES_H__
+
 typedef struct {
   const int code;
   const char* name;
@@ -128,5 +131,5 @@ const exception_t exception[] PROGMEM = {
   { 0,     0                 }
 };
 
-
+#endif
 

@@ -34,7 +34,7 @@ void _jump(void) {
 
 const char zjump_str[] = "zjump";
 void _zjump(void) {
-  if (!pop()) ip = (cell_t*)((size_t)ip + *ip);
+  if (!dStack_pop()) ip = (cell_t*)((size_t)ip + *ip);
   else ip++;
 }
 
@@ -50,9 +50,9 @@ const char do_sys_str[] = "do-sys";
 // on the return stack becomes unavailable until the loop-control parameters
 // are discarded.
 void _do_sys(void) {
-  rPush(LOOP_SYS);
-  rPush(pop());   // push index on to return stack
-  rPush(pop());   // push limit on to return stack
+  rStack_push(LOOP_SYS);
+  rStack_push(dStack_pop());   // push index on to return stack
+  rStack_push(dStack_pop());   // push limit on to return stack
 }
 
 const char loop_sys_str[] = "loop-sys";
@@ -62,17 +62,17 @@ const char loop_sys_str[] = "loop-sys";
 // on the return stack becomes unavailable until the loop-control parameters
 // are discarded.
 void _loop_sys(void) {
-  cell_t limit = rPop();    // fetch limit
-  cell_t index = rPop();    // fetch index
+  cell_t limit = rStack_pop();    // fetch limit
+  cell_t index = rStack_pop();    // fetch index
   index++;
   if (limit - index) {
-    rPush(index);
-    rPush(limit);
+    rStack_push(index);
+    rStack_push(limit);
     ip = (cell_t*)*ip;
   } else {
     ip++;
-    if (rPop() != LOOP_SYS) {
-      push(-22);
+    if (rStack_pop() != LOOP_SYS) {
+      dStack_push(-22);
       _throw();
       return;
     }
@@ -85,10 +85,10 @@ const char leave_sys_str[] = "leave-sys";
 // if they are unavailable. Continue execution immediately following the
 // innermost syntactically enclosing DO ... LOOP or DO ... +LOOP.
 void _leave_sys(void) {
-  rPop();    // fetch limit
-  rPop();    // fetch index
-  if (rPop() != LOOP_SYS) {
-    push(-22);
+  rStack_pop();    // fetch limit
+  rStack_pop();    // fetch index
+  if (rStack_pop() != LOOP_SYS) {
+    dStack_push(-22);
     _throw();
     return;
   }
@@ -102,17 +102,17 @@ const char plus_loop_sys_str[] = "plus_loop-sys";
 // on the return stack becomes unavailable until the loop-control parameters
 // are discarded.
 void _plus_loop_sys(void) {
-  cell_t limit = rPop();    // fetch limit
-  cell_t index = rPop();    // fetch index
-  index += pop();
+  cell_t limit = rStack_pop();    // fetch limit
+  cell_t index = rStack_pop();    // fetch index
+  index += dStack_pop();
   if (limit != index) {
-    rPush(index);
-    rPush(limit);
+    rStack_push(index);
+    rStack_push(limit);
     ip = (cell_t*)*ip;
   } else {
     ip++;
-    if (rPop() != LOOP_SYS) {
-      push(-22);
+    if (rStack_pop() != LOOP_SYS) {
+      dStack_push(-22);
       _throw();
       return;
     }
@@ -126,8 +126,8 @@ const char store_str[] = "!";
 // ( x a-addr --)
 // Store x at a-addr
 void _store(void) { 
-  cell_t* address = (cell_t*)pop();
-  *address = pop();
+  cell_t* address = (cell_t*)dStack_pop();
+  *address = dStack_pop();
 }
 
 const char number_sign_str[] = "#";
@@ -137,12 +137,12 @@ const char number_sign_str[] = "#";
 // pictured numeric output string.
 void _number_sign(void) { 
   udcell_t ud;
-  ud = (udcell_t)pop() << sizeof(ucell_t) * 8;
-  ud += (udcell_t)pop();
+  ud = (udcell_t)dStack_pop() << sizeof(ucell_t) * 8;
+  ud += (udcell_t)dStack_pop();
   *--pPNO = charset[ud % base];
   ud /= base;
-  push((ucell_t)ud);
-  push((ucell_t)(ud >> sizeof(ucell_t) * 8));
+  dStack_push((ucell_t)ud);
+  dStack_push((ucell_t)(ud >> sizeof(ucell_t) * 8));
 }
 
 const char number_sign_gt_str[] = "#>";
@@ -152,8 +152,8 @@ const char number_sign_gt_str[] = "#>";
 // characters within the string.
 void _number_sign_gt(void) {
   _two_drop();
-  push((size_t)pPNO);
-  push((size_t)strlen(pPNO));
+  dStack_push((size_t)pPNO);
+  dStack_push((size_t)strlen(pPNO));
   flags &= ~NUM_PROC;
 }
 
@@ -161,14 +161,14 @@ const char number_sign_s_str[] = "#s";
 // ( ud1 -- ud2)
 void _number_sign_s(void) {
   udcell_t ud;
-  ud = (udcell_t)pop() << sizeof(ucell_t) * 8;
-  ud += (udcell_t)pop();
+  ud = (udcell_t)dStack_pop() << sizeof(ucell_t) * 8;
+  ud += (udcell_t)dStack_pop();
   while (ud) {
     *--pPNO = charset[ud % base];
     ud /= base;
   }
-  push((ucell_t)ud);
-  push((ucell_t)(ud >> sizeof(ucell_t) * 8));
+  dStack_push((ucell_t)ud);
+  dStack_push((ucell_t)(ud >> sizeof(ucell_t) * 8));
 }
 
 const char tick_str[] = "'";
@@ -183,11 +183,11 @@ void _tick(void) {
 //    pop();
   if (getToken()) {
     if (isWord(cTokenBuffer)) {
-      push(w);
+      dStack_push(w);
       return; 
     }
   }
-  push(-13);
+  dStack_push(-13);
   _throw();
 }
 
@@ -195,7 +195,7 @@ const char paren_str[] = "(";
 // ( "ccc<paren>" -- )
 // imedeate
 void _paren(void) {
-  push(')');
+  dStack_push(')');
   _word();
   _drop();
 }
@@ -204,7 +204,7 @@ const char star_str[] = "*";
 // ( n1|u1 n2|u2 -- n3|u3 )
 // multiply n1|u1 by n2|u2 giving the product n3|u3
 void _star(void) {
-  push(pop() * pop());
+  dStack_push(dStack_pop() * dStack_pop());
 }
 
 const char star_slash_str[] = "*/";
@@ -212,11 +212,11 @@ const char star_slash_str[] = "*/";
 // multiply n1 by n2 producing the double cell result d. Divide d by n3
 // giving the single-cell quotient n4.
 void _star_slash(void) {
-  cell_t n3 = pop();
-  cell_t n2 = pop();
-  cell_t n1 = pop();
+  cell_t n3 = dStack_pop();
+  cell_t n2 = dStack_pop();
+  cell_t n1 = dStack_pop();
   dcell_t d = (dcell_t)n1 * (dcell_t)n2;
-  push((cell_t)(d / n3));
+  dStack_push((cell_t)(d / n3));
 }
 
 const char star_slash_mod_str[] = "*/mod";
@@ -224,33 +224,33 @@ const char star_slash_mod_str[] = "*/mod";
 // multiply n1 by n2 producing the double cell result d. Divide d by n3
 // giving the single-cell remainder n4 and quotient n5.
 void _star_slash_mod(void) {
-  cell_t n3 = pop();
-  cell_t n2 = pop();
-  cell_t n1 = pop();
+  cell_t n3 = dStack_pop();
+  cell_t n2 = dStack_pop();
+  cell_t n1 = dStack_pop();
   dcell_t d = (dcell_t)n1 * (dcell_t)n2;
-  push((cell_t)(d % n3));
-  push((cell_t)(d / n3));
+  dStack_push((cell_t)(d % n3));
+  dStack_push((cell_t)(d / n3));
 }
 
 const char plus_str[] = "+";
 // ( n1|u1 n2|u2 -- n3|u3 )
 // add n2|u2 to n1|u1, giving the sum n3|u3
 void _plus(void) {
-  cell_t x = pop();
-  cell_t y = pop();
-  push(x +  y);
+  cell_t x = dStack_pop();
+  cell_t y = dStack_pop();
+  dStack_push(x +  y);
 }
 
 const char plus_store_str[] = "+!";
 // ( n|u a-addr -- )
 // add n|u to the single cell number at a-addr
 void _plus_store(void) {
-  cell_t* address = (cell_t*)pop();
+  cell_t* address = (cell_t*)dStack_pop();
   if (address >= &forthSpace[0] &&
       address < &forthSpace[FORTH_SIZE])
-    *address += pop();
+    *address += dStack_pop();
   else {
-    push(-9);
+    dStack_push(-9);
     _throw();
   }
 }
@@ -270,17 +270,20 @@ const char plus_loop_str[] = "+loop";
 // continue execution immediately following the loop.
 void _plus_loop(void) {
   *pHere++ = PLUS_LOOP_SYS_IDX;
-  *pHere++ = pop();
-  cell_t* leave = (cell_t*)pop();
-  if (leave != (cell_t*)DO_SYS) {
-    if (stack[tos] == DO_SYS) {
-      *leave = (size_t)pHere;
-      pop();
-    } else {
-      push(-22);
-      _throw();
-      return;
-    }
+  cell_t start_addr = dStack_pop();
+  *pHere++ = start_addr;
+  cell_t* ptr = (cell_t*)start_addr;
+  cell_t stop_addr = (cell_t)pHere;
+  do {
+    if (*ptr++ == LEAVE_SYS_IDX) {
+      if (*ptr == 0) {
+        *ptr = stop_addr;
+      }
+    } 
+  } while (ptr != (cell_t*)stop_addr);
+  if ( dStack_pop() != DO_SYS) {
+    dStack_push(-22);
+    _throw();
   }
 }
 
@@ -291,21 +294,21 @@ const char comma_str[] = ",";
 // finishes execution. An ambiguous condition exists if the data-space pointer
 // is not aligned prior to execution of ,.
 static void _comma(void) {
-  *pHere++ = pop();
+  *pHere++ = dStack_pop();
 }
 
 const char minus_str[] = "-";
 // ( n1|u1 n2|u2 -- n3|u3 )
 void _minus(void) {
-  cell_t temp = pop();
-  push(pop() -  temp);
+  cell_t temp = dStack_pop();
+  dStack_push(dStack_pop() -  temp);
 }
 
 const char dot_str[] = ".";
 // ( n -- )
 // display n in free field format
 void _dot(void) {
-  w = pop();
+  w = dStack_pop();
   displayValue();
 }
 
@@ -327,7 +330,7 @@ void _dot_quote(void) {
   else if (state) {
     cDelimiter = '"';
     if (!getToken()) {
-      push(-16);
+      dStack_push(-16);
       _throw();
     }
     length = strlen(cTokenBuffer);
@@ -347,11 +350,11 @@ const char slash_str[] = "/";
 // ( n1 n2 -- n3 )
 // divide n1 by n2 giving a single cell quotient n3
 void _slash(void) {
-  cell_t temp = pop();
+  cell_t temp = dStack_pop();
   if (temp)
-    push(pop() /  temp);
+    dStack_push(dStack_pop() /  temp);
   else {
-    push(-10);
+    dStack_push(-10);
     _throw();
   }
 }
@@ -360,13 +363,13 @@ const char slash_mod_str[] = "/mod";
 // ( n1 n2 -- n3 n4)
 // divide n1 by n2 giving a single cell remainder n3 and quotient n4
 void _slash_mod(void) {
-  cell_t n2 = pop();
-  cell_t n1 = pop();
+  cell_t n2 = dStack_pop();
+  cell_t n1 = dStack_pop();
   if (n2) {
-    push(n1 %  n2);
-    push(n1 /  n2);
+    dStack_push(n1 %  n2);
+    dStack_push(n1 /  n2);
   } else {
-    push(-10);
+    dStack_push(-10);
     _throw();
   }
 }
@@ -375,43 +378,43 @@ const char zero_less_str[] = "0<";
 // ( n -- flag )
 // flag is true if and only if n is less than zero.
 void _zero_less(void) {
-  if (pop() < 0) push(TRUE);
-  else push(FALSE);
+  if (dStack_pop() < 0) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char zero_equal_str[] = "0=";
 // ( n -- flag )
 // flag is true if and only if n is equal to zero.
 void _zero_equal(void) {
-  if (pop() == 0) push(TRUE);
-  else push(FALSE);
+  if (dStack_pop() == 0) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char one_plus_str[] = "1+";
 // ( n1|u1 -- n2|u2 )
 // add one to n1|u1 giving sum n2|u2.
 void _one_plus(void) {
-  push(pop() + 1);
+  dStack_push(dStack_pop() + 1);
 }
 
 const char one_minus_str[] = "1-";
 // ( n1|u1 -- n2|u2 )
 // subtract one to n1|u1 giving sum n2|u2.
 void _one_minus(void) {
-  push(pop() - 1);
+  dStack_push(dStack_pop() - 1);
 }
 
 const char two_store_str[] = "2!";
 // ( x1 x2 a-addr --)
 // Store the cell pair x1 x2 at a-addr, with x2 at a-addr and x1 at a-addr+1
 void _two_store(void) {
-  cell_t* address = (cell_t*)pop();
+  cell_t* address = (cell_t*)dStack_pop();
   if (address >= &forthSpace[0] &&
       address < &forthSpace[FORTH_SIZE - 4]) {
-    *address++ = pop();
-    *address = pop();
+    *address++ = dStack_pop();
+    *address = dStack_pop();
   } else {
-    push(-9);
+    dStack_push(-9);
     _throw();
   }
 }
@@ -420,59 +423,60 @@ const char two_star_str[] = "2*";
 // ( x1 -- x2 )
 // x2 is the result of shifting x1 one bit to toward the MSB
 void _two_star(void) {
-  push(pop() << 1);
+  dStack_push(dStack_pop() << 1);
 }
 
 const char two_slash_str[] = "2/";
 // ( x1 -- x2 )
 // x2 is the result of shifting x1 one bit to toward the LSB
 void _two_slash(void) {
-  push(pop() >> 1);
+  dStack_push(dStack_pop() >> 1);
 }
 
 const char two_fetch_str[] = "2@";  // \x40 == '@'
 // ( a-addr -- x1 x2 )
 // Fetch cell pair x1 x2 at a-addr. x2 is at a-addr, and x1 is at a-addr+1
 void _two_fetch(void) {
-  cell_t* address = (cell_t*)pop();
+  cell_t* address = (cell_t*)dStack_pop();
   cell_t value = *address++;
-  push(value);
+  dStack_push(value);
   value = *address;
-  push(value);
+  dStack_push(value);
 }
 
 const char two_drop_str[] = "2drop";
 // ( x1 x2 -- )
 static void _two_drop(void) {
-  pop();
-  pop();
+  dStack_pop();
+  dStack_pop();
 }
 
 const char two_dup_str[] = "2dup";
 // ( x1 x2 -- x1 x2 x1 x2 )
 void _two_dup(void) {
-  push(stack[tos - 1]);
-  push(stack[tos - 1]);
+  dStack_push(dStack_peek(1));
+  dStack_push(dStack_peek(1));
 }
 
 const char two_over_str[] = "2over";
 // ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
 void _two_over(void) {
-  push(stack[tos - 3]);
-  push(stack[tos - 2]);
+  if (dStack_size() >= 4)
+    dStack_push(dStack_peek(3));
+    dStack_push(dStack_peek(3));
 }
 
 const char two_swap_str[] = "2swap";
 // ( x1 x2 x3 x4 -- x3 x4 x1 x2 )
 void _two_swap(void) {
-  cell_t x4 = pop();
-  cell_t x3 = pop();
-  cell_t x2 = pop();
-  cell_t x1 = pop();
-  push(x3);
-  push(x4);
-  push(x1);
-  push(x2);
+  cell_t x4 = dStack_pop();
+  cell_t x3 = dStack_pop();
+  cell_t x2 = dStack_pop();
+  cell_t x1 = dStack_pop();
+  dStack_push(x3);
+  dStack_push(x4);
+  dStack_push(x1);
+  dStack_push(x2);
 }
 
 const char colon_str[] = ":";
@@ -483,7 +487,7 @@ const char colon_str[] = ":";
 // initiation semantics given below to the current definition....
 void _colon(void) {
   state = TRUE;
-  push(COLON_SYS);
+  dStack_push(COLON_SYS);
   openEntry();
 }
 
@@ -493,8 +497,8 @@ const char semicolon_str[] = ";";
 // Compilation: (C: colon-sys -- )
 // Run-time: ( -- ) (R: nest-sys -- )
 void _semicolon(void) {
-  if (pop() != COLON_SYS) {
-    push(-22);
+  if (dStack_pop() != COLON_SYS) {
+    dStack_push(-22);
     _throw();
     return;
   }
@@ -505,8 +509,8 @@ void _semicolon(void) {
 const char lt_str[] = "<";
 // ( n1 n2 -- flag )
 void _lt(void) {
-  if (pop() > pop()) push(TRUE);
-  else push(FALSE);
+  if (dStack_pop() > dStack_pop()) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char lt_number_sign_str[] = "<#";
@@ -522,16 +526,16 @@ const char eq_str[] = "=";
 // ( x1 x2 -- flag )
 // flag is true if and only if x1 is bit for bit the same as x2
 void _eq(void) {
-  if (pop() == pop()) push(TRUE);
-  else push(FALSE);
+  if (dStack_pop() == dStack_pop()) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char gt_str[] = ">";
 // ( n1 n2 -- flag )
 // flag is true if and only if n1 is greater than n2
 void _gt(void) {
-  if (pop() < pop()) push(TRUE);
-  else push(FALSE);
+  if (dStack_pop() < dStack_pop()) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char to_body_str[] = ">body";
@@ -539,21 +543,21 @@ const char to_body_str[] = ">body";
 // a-addr is the data-field address corresponding to xt. An ambiguous condition
 // exists if xt is not for a word defined by CREATE.
 void _to_body(void) {
-  cell_t* xt = (cell_t*)pop();
+  cell_t* xt = (cell_t*)dStack_pop();
   if ((size_t)xt > 0xFF) {
     if (*xt++ == LITERAL_IDX) {
-      push(*xt);
+      dStack_push(*xt);
       return;
     }
   }
-  push(-31);
+  dStack_push(-31);
   _throw();
 }
 
 const char to_in_str[] = ">in";
 // ( -- a-addr )
 void _to_in(void) {
-  push((size_t)&cpToIn);
+  dStack_push((size_t)&cpToIn);
 }
 
 const char to_number_str[] = ">number";
@@ -573,9 +577,9 @@ void _to_number(void) {
   cell_t accum;
 
   unsigned char negate = 0;                  // flag if number is negative
-  len = (uint8_t)pop();
-  ptr = (char*)pop();
-  accum = pop();
+  len = (uint8_t)dStack_pop();
+  ptr = (char*)dStack_pop();
+  accum = dStack_pop();
   
   // Look at the initial character, handling either '-', '$', or '%'
   switch (*ptr) {
@@ -603,25 +607,25 @@ SKIP:                // common code to skip initial character
     len--;
   }
   if (negate) accum = ~accum + 1;     // apply sign, if necessary
-  push(accum); // Push the resultant number
-  push((size_t)ptr); // Push the last convertered caharacter
-  push(len); // push the remading length of unresolved charaters
+  dStack_push(accum); // Push the resultant number
+  dStack_push((size_t)ptr); // Push the last convertered caharacter
+  dStack_push(len); // push the remading length of unresolved charaters
 }
 
 const char to_r_str[] = ">r";
 // ( x -- ) (R: -- x )
 void _to_r(void) {
-  rPush(pop());
+  rStack_push(dStack_pop());
 }
 
 const char question_dup_str[] = "?dup";
 // ( x -- 0 | x x )
 void _question_dup(void) {
-  if (stack[tos]) {
-    push(stack[tos]);
+  if (dStack_peek(0)) {
+    dStack_push(dStack_peek(0));
   } else {
-    pop();
-    push(0);
+    dStack_pop();
+    dStack_push(0);
   }
 }
 
@@ -629,8 +633,8 @@ const char fetch_str[] = "@";
 // ( a-addr -- x1 )
 // Fetch cell x1 at a-addr.
 void _fetch(void) {
-  cell_t* address = (cell_t*)pop();
-  push(*address);
+  cell_t* address = (cell_t*)dStack_pop();
+  dStack_push(*address);
 }
 
 const char abort_str[] = "abort";
@@ -638,7 +642,7 @@ const char abort_str[] = "abort";
 // Empty the data stack and preform the function of QUIT, which includes emptying
 // the return stack, without displaying a message.
 void _abort(void) {
-  push(-1);
+  dStack_push(-1);
   _throw();
 }
 
@@ -653,13 +657,13 @@ const char abort_quote_str[] = "abort\x22";
 // of ABORT.
 void _abort_quote(void) {
   *pHere++ = ZJUMP_IDX;
-  push((size_t)pHere);  // Push the address for our origin
+  dStack_push((size_t)pHere);  // Push the address for our origin
   *pHere++ = 0;
   _dot_quote();
   *pHere++ = LITERAL_IDX;
   *pHere++ = -2;
   *pHere++ = THROW_IDX;
-  cell_t* orig = (cell_t*)pop();
+  cell_t* orig = (cell_t*)dStack_pop();
   *orig = (size_t)pHere - (size_t)orig;
 }
 
@@ -667,17 +671,17 @@ const char abs_str[] = "abs";
 // ( n -- u)
 // u is the absolute value of n 
 void _abs(void) {
-  cell_t n = pop();
-  push(n < 0 ? 0 - n : n);
+  cell_t n = dStack_pop();
+  dStack_push(n < 0 ? 0 - n : n);
 }
 
 const char accept_str[] = "accept";
 // ( c-addr +n1 -- +n2 )
 void _accept(void) {
-  cell_t length = pop();
-  char* addr = (char*)pop();
+  cell_t length = dStack_pop();
+  char* addr = (char*)dStack_pop();
   length = getLine(addr, length);
-  push(length);
+  dStack_push(length);
 }
 
 const char align_str[] = "align";
@@ -691,9 +695,9 @@ const char aligned_str[] = "aligned";
 // ( addr -- a-addr)
 // a-addr is the first aligned address greater than or equal to addr.
 void _aligned(void) {
-  ucell_t addr = pop();
+  ucell_t addr = dStack_pop();
   ALIGN(addr);
-  push(addr);
+  dStack_push(addr);
 }
 
 const char allot_str[] = "allot";
@@ -702,14 +706,14 @@ const char allot_str[] = "allot";
 // than zero, release |n| address units of data space. If n is zero, leave the
 // data-space pointer unchanged.
 void _allot(void) {
-  cell_t* pNewHere = pHere + pop();
+  cell_t* pNewHere = pHere + dStack_pop();
 
   // Check that the new pHere is not outside of the forth space
   if (pNewHere >= &forthSpace[0] &&
       pNewHere < &forthSpace[FORTH_SIZE]) {
     pHere = pNewHere;      // Save the valid address
   } else {                 // Throw an exception
-    push(-9);
+    dStack_push(-9);
     _throw();
   }
 }
@@ -718,13 +722,13 @@ const char and_str[] = "and";
 // ( x1 x2 -- x3 )
 // x3 is the bit by bit logical and of x1 with x2
 void _and(void) {
-  push(pop() & pop());
+  dStack_push(dStack_pop() & dStack_pop());
 }
 
 const char base_str[] = "base";
 // ( -- a-addr)
 void _base(void) {
-  push((size_t)&base);
+  dStack_push((size_t)&base);
 }
 
 const char begin_str[] = "begin";
@@ -735,7 +739,7 @@ const char begin_str[] = "begin";
 // Run-time: ( -- )
 // Continue execution.
 void _begin(void) {
-  push((size_t)pHere);
+  dStack_push((size_t)pHere);
   *pHere = 0;
 }
 
@@ -743,40 +747,40 @@ const char bl_str[] = "bl";
 // ( -- char )
 // char is the character value for a space.
 void _bl(void) {
-  push(' ');
+  dStack_push(' ');
 }
 
 const char c_store_str[] = "c!";
 // ( char c-addr -- )
 void _c_store(void) {
-  uint8_t *addr = (uint8_t*) pop();
-  *addr = (uint8_t)pop();
+  uint8_t *addr = (uint8_t*) dStack_pop();
+  *addr = (uint8_t)dStack_pop();
 }
 
 const char c_comma_str[] = "c,";
 // ( char -- )
 void _c_comma(void) {
-  *(char*)pHere++ = (char)pop();
+  *(char*)pHere++ = (char)dStack_pop();
 }
 
 const char c_fetch_str[] = "c@";
 // ( c-addr -- char )
 void _c_fetch(void) {
-  uint8_t *addr = (uint8_t *) pop();
-  push(*addr);
+  uint8_t *addr = (uint8_t *) dStack_pop();
+  dStack_push(*addr);
 }
 
 const char cell_plus_str[] = "cell+";
 // ( a-addr1 -- a-addr2 )
 void _cell_plus(void) {
-  push((size_t)(pop() + sizeof(cell_t)));
+  dStack_push((size_t)(dStack_pop() + sizeof(cell_t)));
 }
 
 const char cells_str[] = "cells";
 // ( n1 -- n2 )
 // n2 is the size in address units of n1 cells.
 void _cells(void) {
-  push(pop()*sizeof(cell_t));
+  dStack_push(dStack_pop()*sizeof(cell_t));
 }
 
 const char char_str[] = "char";
@@ -785,9 +789,9 @@ const char char_str[] = "char";
 // of its first character onto the stack.
 void _char(void) {
   if(getToken()) {
-    push(cTokenBuffer[0]);
+    dStack_push(cTokenBuffer[0]);
   } else {
-    push(-16);
+    dStack_push(-16);
     _throw();
   }
 }
@@ -795,7 +799,7 @@ void _char(void) {
 const char char_plus_str[] = "char+";
 // ( c-addr1 -- c-addr2 )
 void _char_plus(void) {
-  push(pop() + 1);
+  dStack_push(dStack_pop() + 1);
 }
 
 const char chars_str[] = "chars";
@@ -809,7 +813,7 @@ const char constant_str[] = "constant";
 void _constant(void) {
   openEntry();
   *pHere++ = LITERAL_IDX;
-  *pHere++ = pop();
+  *pHere++ = dStack_pop();
   closeEntry();
 }
 
@@ -820,10 +824,10 @@ const char count_str[] = "count";
 // contents of the charater at c-addr1, which is the length in characters of the
 // string at c-addr2.
 void _count(void) {
-  uint8_t* addr = (uint8_t*)pop();
+  uint8_t* addr = (uint8_t*)dStack_pop();
   cell_t value = *addr++;
-  push((size_t)addr);
-  push(value);
+  dStack_push((size_t)addr);
+  dStack_push(value);
 }
 
 const char cr_str[] = "cr";
@@ -867,16 +871,16 @@ const char depth_str[] = "depth";
 // ( -- +n )
 // +n is the number of single cells on the stack before +n was placed on it.
 void _depth(void) { // value --
-  push(tos + 1);
+  dStack_push(dStack_size());
 }
 
 const char do_str[] = "do";
 // Compilation: (C: -- do-sys)
 // Run-Time: ( n1|u1 n2|u2 -- ) (R: -- loop-sys )
 void _do(void) {
-  push(DO_SYS);
+  dStack_push(DO_SYS);
   *pHere++ = DO_SYS_IDX;
-  push((size_t)pHere); // store the origin address of the do loop
+  dStack_push((size_t)pHere); // store the origin address of the do loop
 }
 
 const char does_str[] = "does>";
@@ -895,14 +899,14 @@ const char drop_str[] = "drop";
 // ( x -- )
 // Remove x from stack
 void _drop(void) {
-  pop();
+  dStack_pop();
 }
 
 const char dupe_str[] = "dup";
 // ( x -- x x )
 // Duplicate x
 void _dupe(void) {
-  push(stack[tos]);
+  dStack_push(dStack_peek(0));
 }
 
 const char else_str[] = "else";
@@ -910,10 +914,10 @@ const char else_str[] = "else";
 // Compilation: (C: orig1 -- orig2)
 // Run-Time: ( -- )
 void _else(void) {
-  cell_t* orig = (cell_t*)pop();
+  cell_t* orig = (cell_t*)dStack_pop();
   *pHere++ = JUMP_IDX;
 //  push((size_t)pHere); // Which is correct?
-  push((size_t)pHere++);
+  dStack_push((size_t)pHere++);
   *orig = (size_t)pHere - (size_t)orig;
 }
 
@@ -921,7 +925,7 @@ const char emit_str[] = "emit";
 // ( x -- )
 // display x as a character
 void _emit(void) {
-  Serial.print((char) pop());
+  Serial.print((char) dStack_pop());
 }
 
 const char environment_str[] = "environment?";
@@ -935,67 +939,67 @@ const char environment_str[] = "environment?";
 // otherwise, the flag is true and i*x returned is the of the type specified in
 // the table for the attribute queried.
 void _environment(void) {
-  char length = (char)pop();
-  char* pStr = (char*)pop();
+  char length = (char)dStack_pop();
+  char* pStr = (char*)dStack_pop();
   if (length && length < BUFFER_SIZE) {
     if (!strcmp_P(pStr, PSTR("/counted-string"))) {
-      push(BUFFER_SIZE);
+      dStack_push(BUFFER_SIZE);
       return;
     }
     if (!strcmp_P(pStr, PSTR("/hold"))) {
-      push(HOLD_SIZE);
+      dStack_push(HOLD_SIZE);
       return;
     }
     if (!strcmp_P(pStr, PSTR("address-unit-bits"))) {
-      push(sizeof(void *) * 8);
+      dStack_push(sizeof(void *) * 8);
       return;
     }
     if (!strcmp_P(pStr, PSTR("core"))) {
-      push(CORE);
+      dStack_push(CORE);
       return;
     }
     if (!strcmp_P(pStr, PSTR("core-ext"))) {
-      push(CORE_EXT);
+      dStack_push(CORE_EXT);
       return;
     }
     if (!strcmp_P(pStr, PSTR("floored"))) {
-      push(FLOORED);
+      dStack_push(FLOORED);
       return;
     }
     if (!strcmp_P(pStr, PSTR("max-char"))) {
-      push(MAX_CHAR);
+      dStack_push(MAX_CHAR);
       return;
     }
 #if DOUBLE
     if (!strcmp_P(pStr, PSTR("max-d"))) {
-      push(MAX_OF(dcell_t));
+      dStack_push(MAX_OF(dcell_t));
       return;
     }
 #endif
     if (!strcmp_P(pStr, PSTR("max-n"))) {
-      push(MAX_OF(cell_t));
+      dStack_push(MAX_OF(cell_t));
       return;
     }
     if (!strcmp_P(pStr, PSTR("max-u"))) {
-      push(MAX_OF(ucell_t));
+      dStack_push(MAX_OF(ucell_t));
       return;
     }
 #if DOUBLE
     if (!strcmp_P(pStr, PSTR("max-ud"))) {
-      push(MAX_OF(udcell_t));
+      dStack_push(MAX_OF(udcell_t));
       return;
     }
 #endif
     if (!strcmp_P(pStr, PSTR("return-stack-size"))) {
-      push(RSTACK_SIZE);
+      dStack_push(RSTACK_SIZE);
       return;
     }
     if (!strcmp_P(pStr, PSTR("stack-size"))) {
-      push(STACK_SIZE);
+      dStack_push(STACK_SIZE);
       return;
     }
   }
-  push(-13);
+  dStack_push(-13);
   _throw();
 }
 
@@ -1011,8 +1015,8 @@ void _evaluate(void) {
   char* tempSourceEnd = cpSourceEnd;
   char* tempToIn = cpToIn;
 
-  uint8_t length = pop();
-  cpSource = (char*)pop();
+  uint8_t length = dStack_pop();
+  cpSource = (char*)dStack_pop();
   cpSourceEnd = cpSource + length;
   cpToIn = cpSource;
   interpreter();
@@ -1027,10 +1031,10 @@ const char execute_str[] = "execute";
 // stack effects are due to the word EXECUTEd
 void _execute(void) {
   func function;
-  w = pop();
+  w = dStack_pop();
   if (w > 255) {
     // rpush(0);
-    rPush((cell_t) ip);        // CAL - Push our return address
+    rStack_push((cell_t) ip);        // CAL - Push our return address
     ip = (cell_t *)w;          // set the ip to the XT (memory location)
     executeWord();
   } else {
@@ -1047,7 +1051,7 @@ const char exit_str[] = "exit";
 // executing EXIT within a do-loop, a program shall discard the loop-control
 // parameters by executing UNLOOP.
 void _exit(void) {
-  ip = (cell_t*)rPop();
+  ip = (cell_t*)rStack_pop();
 }
 
 const char fill_str[] = "fill";
@@ -1055,9 +1059,9 @@ const char fill_str[] = "fill";
 // if u is greater than zero, store char in u consecutive characters of memory
 // beginning with c-addr.
 void _fill(void) {
-  char ch = (char)pop();
-  cell_t limit = pop();
-  char* addr = (char*)pop();
+  char ch = (char)dStack_pop();
+  cell_t limit = dStack_pop();
+  char* addr = (char*)dStack_pop();
   for (int i = 1; i < limit; i++) {
     *addr++ = ch;
   }
@@ -1072,16 +1076,16 @@ const char find_str[] = "find";
 void _find(void) {
   uint8_t index = 0;
 
-  cell_t *addr = (cell_t *)pop();
+  cell_t *addr = (cell_t *)dStack_pop();
   cell_t length = *addr++;
 
   char *ptr = (char*) addr;
   if (length = 0) {
-    push(-16);
+    dStack_push(-16);
     _throw();
     return;
   } else if (length > BUFFER_SIZE) {
-    push(-18);
+    dStack_push(-18);
     _throw();
     return;
   }
@@ -1091,10 +1095,10 @@ void _find(void) {
   while (pUserEntry) {
     if (strcmp(pUserEntry->name, ptr) == 0) {
       length = strlen(pUserEntry->name);
-      push((size_t)pUserEntry->cfa);
+      dStack_push((size_t)pUserEntry->cfa);
       wordFlags = pUserEntry->flags;
-      if (wordFlags & IMMEDIATE) push(1);
-      else push(-1);
+      if (wordFlags & IMMEDIATE) dStack_push(1);
+      else dStack_push(-1);
       return;
     }
     pUserEntry = (userEntry_t*)pUserEntry->prevEntry;
@@ -1102,33 +1106,33 @@ void _find(void) {
   // Second Search through the flash Dictionary
   while (flashDict[index].name) {
     if (!strcasecmp(ptr, flashDict[index].name)) {
-      push(index + 1);
+      dStack_push(index + 1);
       wordFlags = flashDict[index].flags;
-      if (wordFlags & IMMEDIATE) push(1);
-      else push(-1);
+      if (wordFlags & IMMEDIATE) dStack_push(1);
+      else dStack_push(-1);
       return;
     }
     index++;
   }
-  push((size_t)ptr);
-  push(0);
+  dStack_push((size_t)ptr);
+  dStack_push(0);
 }
 
 const char fm_slash_mod_str[] = "fm/mod";
 // ( d1 n1 -- n2 n3 )
 // Divide d1 by n1, giving the floored quotient n3 and remainder n2.
 void _fm_slash_mod(void) {
-  cell_t n1 = pop();
-  cell_t d1 = pop();
-  push(d1 /  n1);
-  push(d1 %  n1);
+  cell_t n1 = dStack_pop();
+  cell_t d1 = dStack_pop();
+  dStack_push(d1 /  n1);
+  dStack_push(d1 %  n1);
 }
 
 const char here_str[] = "here";
 // ( -- addr )
 // addr is the data-space pointer.
 void _here(void) {
-  push((size_t)pHere);
+  dStack_push((size_t)pHere);
 }
 
 const char hold_str[] = "hold";
@@ -1136,7 +1140,7 @@ const char hold_str[] = "hold";
 // add char to the beginning of the pictured numeric output string.
 void _hold(void) {
   if (flags & NUM_PROC) {
-    *--pPNO = (char) pop();
+    *--pPNO = (char) dStack_pop();
   }
 }
 
@@ -1144,7 +1148,7 @@ const char i_str[] = "i";
 // Interpretation: undefined
 // Execution: ( -- n|u ) (R: loop-sys -- loop-sys )
 void _i(void) {
-  push(rStack[rtos - 1]);
+  dStack_push(rStack_peek(1));
 }
 
 const char if_str[] = "if";
@@ -1153,7 +1157,7 @@ const char if_str[] = "if";
 void _if(void) {
   *pHere++ = ZJUMP_IDX;
   *pHere = 0;
-  push((size_t)pHere++);
+  dStack_push((size_t)pHere++);
 }
 
 const char immediate_str[] = "immediate";
@@ -1169,23 +1173,23 @@ const char invert_str[] = "invert";
 // ( x1 -- x2 )
 // invert all bits in x1, giving its logical inverse x2
 void _invert(void)   {
-  push(~pop());
+  dStack_push(~dStack_pop());
 }
 
 const char j_str[] = "j";
 // Interpretation: undefined
-// Execution: ( -- n|u ) (R: loop-sys1 loop-sys2 -- loop-sys1 loop-sys2 )
+// Execution: ( -- n|u ) (R0: loop-sys1 loop-sys2 -- loop-sys1 loop-sys2 )
 // n|u is a copy of the next-outer loop index. An ambiguous condition exists
 // if the loop control parameters of the next-outer loop, loop-sys1, are
 // unavailable.
 void _j(void) {
-  push(rStack[rtos - 4]);
+  dStack_push(rStack_peek(4));
 }
 
 const char key_str[] = "key";
 // ( -- char )
 void _key(void) {
-  push(getKey());
+  dStack_push(getKey());
 }
 
 const char leave_str[] = "leave";
@@ -1193,9 +1197,7 @@ const char leave_str[] = "leave";
 // Execution: ( -- ) (R: loop-sys -- )
 void _leave(void) {
   *pHere++ = LEAVE_SYS_IDX;
-  push((size_t)pHere);
   *pHere++ = 0;
-  _swap();
 }
 
 const char literal_str[] = "literal";
@@ -1206,9 +1208,9 @@ const char literal_str[] = "literal";
 void _literal(void) {
   if (state) {
     *pHere++ = LITERAL_IDX;
-    *pHere++ = pop();
+    *pHere++ = dStack_pop();
   } else {
-    push(*ip++);
+    dStack_push(*ip++);
   }
 }
 
@@ -1218,17 +1220,20 @@ const char loop_str[] = "loop";
 // Run-Time: ( -- ) (R: loop-sys1 -- loop-sys2 )
 void _loop(void) {
   *pHere++ = LOOP_SYS_IDX;
-  *pHere++ = pop();
-  cell_t* leave = (cell_t*)pop();
-  if (leave != (cell_t*)DO_SYS) {
-    if (stack[tos] == DO_SYS) {
-      *leave = (size_t)pHere;
-      pop();
-    } else {
-      push(-22);
-      _throw();
-      return;
+  cell_t start_addr = dStack_pop();
+  *pHere++ = start_addr;
+  cell_t stop_addr = (cell_t)pHere;
+  cell_t* ptr = (cell_t*)start_addr;
+  do {
+    if (*ptr++ == LEAVE_SYS_IDX) {
+      if (*ptr == 0) {
+        *ptr = stop_addr;
+      }
     }
+  } while (ptr != (cell_t*)stop_addr);
+  if ( dStack_pop() != DO_SYS) {
+    dStack_push(-22);
+    _throw();
   }
 }
 
@@ -1236,44 +1241,44 @@ const char lshift_str[] = "lshift";
 // ( x1 u -- x2 )
 // x2 is x1 shifted to left by u positions.
 void _lshift(void) {
-  cell_t u = pop();
-  cell_t x1 = pop();
-  push(x1 << u);
+  cell_t u = dStack_pop();
+  cell_t x1 = dStack_pop();
+  dStack_push(x1 << u);
 }
 
 const char m_star_str[] = "m*";
 // ( n1 n2 -- d )
 // d is the signed product of n1 times n2.
 void _m_star(void) {
-  push(pop() * pop());
+  dStack_push(dStack_pop() * dStack_pop());
 }
 
 const char max_str[] = "max";
 // ( n1 n2 -- n3 )
 // n3 is the greater of of n1 or n2.
 void _max(void) {
-  cell_t n2 = pop();
-  cell_t n1 = pop();
-  if (n1 > n2) push(n1);
-  else push(n2);
+  cell_t n2 = dStack_pop();
+  cell_t n1 = dStack_pop();
+  if (n1 > n2) dStack_push(n1);
+  else dStack_push(n2);
 }
 
 const char min_str[] = "min";
 // ( n1 n2 -- n3 )
 // n3 is the lesser of of n1 or n2.
 void _min(void) {
-  cell_t n2 = pop();
-  cell_t n1 = pop();
-  if (n1 > n2) push(n2);
-  else push(n1);
+  cell_t n2 = dStack_pop();
+  cell_t n1 = dStack_pop();
+  if (n1 > n2) dStack_push(n2);
+  else dStack_push(n1);
 }
 
 const char mod_str[] = "mod";
 // ( n1 n2 -- n3 )
 // Divide n1 by n2 giving the remainder n3.
 void _mod(void) {
-  cell_t temp = pop();
-  push(pop() %  temp);
+  cell_t temp = dStack_pop();
+  dStack_push(dStack_pop() %  temp);
 }
 
 const char move_str[] = "move";
@@ -1281,9 +1286,9 @@ const char move_str[] = "move";
 // if u is greater than zero, copy the contents of u consecutive address
 // starting at addr1 to u consecutive address starting at addr2.
 void _move(void) {
-  cell_t u = pop();
-  cell_t* to = (cell_t*)pop();
-  cell_t* from = (cell_t*)pop();
+  cell_t u = dStack_pop();
+  cell_t* to = (cell_t*)dStack_pop();
+  cell_t* from = (cell_t*)dStack_pop();
   for (cell_t i = 0; i < u; i++) {
     *to++ = *from++;
   }
@@ -1293,20 +1298,20 @@ const char negate_str[] = "negate";
 // ( n1 -- n2 )
 // Negate n1, giving its arithmetic inverse n2.
 void _negate(void) {
-  push(!pop());
+  dStack_push(-dStack_pop());
 }
 
 const char or_str[] = "or";
 // ( x1 x2 -- x3 )
 // x3 is the bit by bit logical or of x1 with x2
 void _or(void) {
-  push(pop() |  pop());
+  dStack_push(dStack_pop() |  dStack_pop());
 }
 
 const char over_str[] = "over";
-// ( x y -- x y x )
+// ( x1 x2 -- x1 x2 x1 )
 void _over(void) {
-  push(stack[tos - 1]);
+  dStack_push(dStack_peek(1));
 }
 
 const char postpone_str[] = "postpone";
@@ -1317,13 +1322,13 @@ const char postpone_str[] = "postpone";
 void _postpone(void) {
   func function;
   if (!getToken()) {
-    push(-16);
+    dStack_push(-16);
     _throw();
   }
   if (isWord(cTokenBuffer)) {
     if (wordFlags & COMP_ONLY) {
       if (w > 255) {
-        rPush(0);            // Push 0 as our return address
+        rStack_push(0);            // Push 0 as our return address
         ip = (cell_t *)w;          // set the ip to the XT (memory location)
         executeWord();
       } else {
@@ -1335,7 +1340,7 @@ void _postpone(void) {
       *pHere++ = (cell_t)w;
     }
   } else {
-    push(-13);
+    dStack_push(-13);
     _throw();
     return;
   }
@@ -1346,7 +1351,7 @@ const char quit_str[] = "quit";
 // Empty the return stack, store zero in SOURCE-ID if it is present,
 // make the user input device the input source, enter interpretation state.
 void _quit(void) {
-  rtos = -1;
+  rStack_clear();
   *cpToIn = 0;          // Terminate buffer to stop interpreting
   Serial.flush();
 }
@@ -1356,7 +1361,7 @@ const char r_from_str[] = "r>";
 // Execution: ( -- x ) (R: x -- )
 // move x from the return stack to the data stack.
 void _r_from(void) {
-  push(rPop());
+  dStack_push(rStack_pop());
 }
 
 const char r_fetch_str[] = "r@";
@@ -1364,7 +1369,7 @@ const char r_fetch_str[] = "r@";
 // Execution: ( -- x ) (R: x -- x)
 // Copy x from the return stack to the data stack.
 void _r_fetch(void) {
-  push(rStack[rtos]);
+  dStack_push(rStack_peek(0));
 }
 
 const char recurse_str[] = "recurse";
@@ -1386,29 +1391,29 @@ void _repeat(void) {
   cell_t dest;
   cell_t* orig;
   *pHere++ = JUMP_IDX;
-  *pHere++ = pop() - (size_t)pHere;
-  orig = (cell_t*)pop();
+  *pHere++ = dStack_pop() - (size_t)pHere;
+  orig = (cell_t*)dStack_pop();
   *orig = (size_t)pHere - (size_t)orig;
 }
 
 const char rot_str[] = "rot";
 // ( x1 x2 x3 -- x2 x3 x1)
 void _rot(void) {
-  cell_t x3 = pop();
-  cell_t x2 = pop();
-  cell_t x1 = pop();
-  push(x2);
-  push(x3);
-  push(x1);
+  cell_t x3 = dStack_pop();
+  cell_t x2 = dStack_pop();
+  cell_t x1 = dStack_pop();
+  dStack_push(x2);
+  dStack_push(x3);
+  dStack_push(x1);
 }
 
 const char rshift_str[] = "rshift";
 // ( x1 u -- x2 )
 // x2 is x1 shifted to right by u positions.
 void _rshift(void) {
-  cell_t u = pop();
-  cell_t x1 = pop();
-  push(x1 >> u);
+  cell_t u = dStack_pop();
+  cell_t x1 = dStack_pop();
+  dStack_push((ucell_t)x1 >> u);
 }
 
 const char s_quote_str[] = "s\x22"; 
@@ -1423,16 +1428,16 @@ void _s_quote(void) {
   uint8_t i;
   char length;
   if (flags & EXECUTE) {
-    push((size_t)ip);
+    dStack_push((size_t)ip);
     cell_t len = strlen((char*)ip);
-    push(len++);    // increment for the null terminator
+    dStack_push(len++);    // increment for the null terminator
     ALIGN(len);
     ip = (cell_t*)((size_t)ip + len);
   }
   else if (state) {
     cDelimiter = '"';
     if (!getToken()) {
-      push(-16);
+      dStack_push(-16);
       _throw();
     }
     length = strlen(cTokenBuffer);
@@ -1451,16 +1456,16 @@ void _s_quote(void) {
 const char s_to_d_str[] = "s>d";
 // ( n -- d )
 void _s_to_d(void) {
-  cell_t n = pop();
-  push(0);
-  push(n);
+  cell_t n = dStack_pop();
+  dStack_push(n);
+  dStack_push(0);
 }
 
 const char sign_str[] = "sign";
 // ( n -- )
 void _sign(void) {
   if (flags & NUM_PROC) {
-    cell_t sign = pop();
+    cell_t sign = dStack_pop();
     if (sign < 0) *--pPNO = '-';
   }
 }
@@ -1469,18 +1474,18 @@ const char sm_slash_rem_str[] = "sm/rem";
 // ( d1 n1 -- n2 n3 )
 // Divide d1 by n1, giving the symmetric quotient n3 and remainder n2.
 void _sm_slash_rem(void) {
-  cell_t n1 = pop();
-  cell_t d1 = pop();
-  push(d1 /  n1);
-  push(d1 %  n1);
+  cell_t n1 = dStack_pop();
+  cell_t d1 = dStack_pop();
+  dStack_push(d1 /  n1);
+  dStack_push(d1 %  n1);
 }
 
 const char source_str[] = "source";
 // ( -- c-addr u )
 // c-addr is the address of, and u is the number of characters in, the input buffer.
 void _source(void) {
-  push((size_t)&cInputBuffer);
-  push(strlen(cInputBuffer));
+  dStack_push((size_t)&cInputBuffer);
+  dStack_push(strlen(cInputBuffer));
 }
 
 const char space_str[] = "space";
@@ -1494,9 +1499,10 @@ const char spaces_str[] = "spaces";
 // ( n -- )
 // if n is greater than zero, display n space
 void _spaces(void) {
-  char n = (char) pop();
+  char n = (char) dStack_pop();
   while (n > 0) {
     Serial.print(sp_str);
+    n--;
   }
 }
 
@@ -1504,17 +1510,17 @@ const char state_str[] = "state";
 // ( -- a-addr )
 // a-addr is the address of the cell containing compilation state flag.
 void _state(void) {
-  push((size_t)&state);
+  dStack_push((size_t)&state);
 }
 
 const char swap_str[] = "swap";
 void _swap(void) { // x y -- y x
   cell_t x, y;
 
-  y = pop();
-  x = pop();
-  push(y);
-  push(x);
+  y = dStack_pop();
+  x = dStack_pop();
+  dStack_push(y);
+  dStack_push(x);
 }
 
 const char then_str[] = "then";
@@ -1522,7 +1528,7 @@ const char then_str[] = "then";
 // Compilation: (C: orig -- )
 // Run-Time: ( -- )
 void _then(void) {
-  cell_t* orig = (cell_t*)pop();
+  cell_t* orig = (cell_t*)dStack_pop();
   *orig = (size_t)pHere - (size_t)orig;
 }
 
@@ -1530,8 +1536,8 @@ const char type_str[] = "type";
 // ( c-addr u -- )
 // if u is greater than zero display character string specified by c-addr and u
 void _type(void) {
-  uint8_t length = (uint8_t)pop();
-  char* addr = (char*)pop();
+  uint8_t length = (uint8_t)dStack_pop();
+  char* addr = (char*)dStack_pop();
   for (char i = 0; i < length; i++)
     Serial.print(*addr++);
 }
@@ -1539,39 +1545,43 @@ void _type(void) {
 const char u_dot_str[] = "u.";
 // ( u -- )
 // Displau u in free field format
+// tested and fixed by Alex Moskovskij
 void _u_dot(void) {
-  Serial.print((ucell_t) pop());
+  Serial.print((ucell_t) dStack_pop());
+  Serial.print(F(" "));
 }
 
 const char u_lt_str[] = "u<";
 // ( u1 u2 -- flag )
 // flag is true if and only if u1 is less than u2.
 void _u_lt(void) {
-  if ((ucell_t)pop() > ucell_t(pop())) push(TRUE);
-  else push(FALSE);
+  if ((ucell_t)dStack_pop() > ucell_t(dStack_pop())) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char um_star_str[] = "um*";
 // ( u1 u2 -- ud )
 // multiply u1 by u2, giving the unsigned double-cell product ud
 void _um_star(void) {
-  udcell_t ud = pop() * pop();
-  cell_t lsb = (ucell_t)ud;
-  cell_t msb = (ucell_t)(ud >> sizeof(ucell_t) * 8);
-  push(msb);
-  push(lsb);
+  ucell_t u2 = (ucell_t)dStack_pop();
+  ucell_t u1 = (ucell_t)dStack_pop();
+  udcell_t ud = (udcell_t)u1 * (udcell_t)u2;
+  ucell_t lsb = ud;
+  ucell_t msb = (ud >> sizeof(ucell_t) * 8);
+  dStack_push(lsb);
+  dStack_push(msb);
 }
 
 const char um_slash_mod_str[] = "um/mod";
 // ( ud u1 -- u2 u3 )
 // Divide ud by u1 giving quotient u3 and remainder u2.
 void _um_slash_mod(void) {
-  ucell_t u1 = pop();
-  udcell_t lsb = pop();
-  udcell_t msb = pop();
+  ucell_t u1 = dStack_pop();
+  udcell_t lsb = dStack_pop();
+  udcell_t msb = dStack_pop();
   udcell_t ud = (msb << 16) + (lsb);
-  push(ud % u1);
-  push(ud / u1);
+  dStack_push(ud % u1);
+  dStack_push(ud / u1);
 }
 
 const char unloop_str[] = "unloop";
@@ -1579,10 +1589,10 @@ const char unloop_str[] = "unloop";
 // Execution: ( -- )(R: loop-sys -- )
 void _unloop(void) {
   Serial.print(not_done_str); 
-  rPop();
-  rPop();
-  if (rPop() != LOOP_SYS) {
-    push(-22);
+  rStack_pop();
+  rStack_pop();
+  if (rStack_pop() != LOOP_SYS) {
+    dStack_push(-22);
     _throw();
   }
 }
@@ -1593,7 +1603,7 @@ const char until_str[] = "until";
 // Run-Time: ( x -- )
 void _until(void) {
   *pHere++ = ZJUMP_IDX;
-  *pHere = pop() - (size_t)pHere;
+  *pHere = dStack_pop() - (size_t)pHere;
   pHere += 1;
 }
 
@@ -1607,7 +1617,7 @@ const char variable_str[] = "variable";
 // initializing the contents of a reserved cell.
 void _variable(void) {
   if (flags & EXECUTE) {
-    push((size_t)ip++);
+    dStack_push((size_t)ip++);
   } else {
     openEntry();
     *pHere++ = VARIABLE_IDX;
@@ -1623,12 +1633,12 @@ const char while_str[] = "while";
 void _while(void) {
   ucell_t dest;
   ucell_t orig;
-  dest = pop();
+  dest = dStack_pop();
   *pHere++ = ZJUMP_IDX;
   orig = (size_t)pHere;
   *pHere++ = 0;
-  push(orig);
-  push(dest);
+  dStack_push(orig);
+  dStack_push(dest);
 }
 
 const char word_str[] = "word";
@@ -1649,14 +1659,14 @@ const char word_str[] = "word";
 void _word(void) {
   uint8_t *start, *ptr;
 
-  cDelimiter = (char)pop();
+  cDelimiter = (char)dStack_pop();
   start = (uint8_t *)pHere++;
   ptr = (uint8_t *)pHere;
   while (cpToIn <= cpSourceEnd) {
     if (*cpToIn == cDelimiter || *cpToIn == 0) {
       *((cell_t *)start) = (ptr - start) - sizeof(cell_t); // write the length byte
       pHere = (cell_t *)start;                     // reset pHere (transient memory)
-      push((size_t)start);                // push the c-addr onto the stack
+      dStack_push((size_t)start);                // push the c-addr onto the stack
       cpToIn++;
       break;
     } else *ptr++ = *cpToIn++;
@@ -1668,7 +1678,7 @@ const char xor_str[] = "xor";
 // ( x1 x2 -- x3 )
 // x3 is the bit by bit exclusive or of x1 with x2
 void _xor(void) {
-  push(pop() ^  pop());
+  dStack_push(dStack_pop() ^  dStack_pop());
 }
 
 const char left_bracket_str[] = "[";
@@ -1692,14 +1702,14 @@ const char bracket_tick_str[] = "[']";
 // of compilation state.
 void _bracket_tick(void) {
   if (!getToken()) {
-    push(-16);
+    dStack_push(-16);
     _throw();
   }
   if (isWord(cTokenBuffer)) {
     *pHere++ = LITERAL_IDX;
     *pHere++ = w;
   } else {
-    push(-13);
+    dStack_push(-13);
     _throw();
     return;
   }
@@ -1717,7 +1727,7 @@ void _bracket_char(void) {
     *pHere++ = LITERAL_IDX;
     *pHere++ = cTokenBuffer[0];
   } else {
-    push(-16);
+    dStack_push(-16);
     _throw();
   }
 }
@@ -1738,7 +1748,7 @@ const char dot_paren_str[] = ".(";
 // Parse and display ccc delimitied by ) (right parenthesis). ,( is an imedeate
 // word
 void _dot_paren(void) { 
-  push(')');
+  dStack_push(')');
   _word();
   _count();
   _type();
@@ -1748,18 +1758,18 @@ const char zero_not_equal_str[] = "0<>";
 // ( x -- flag)
 // flag is true if and only if x is not equal to zero. 
 void _zero_not_equal(void) { 
-  w = pop();
-  if (w == 0) push(FALSE);
-  else push(TRUE);
+  w = dStack_pop();
+  if (w == 0) dStack_push(FALSE);
+  else dStack_push(TRUE);
 }
 
 const char zero_greater_str[] = "0>";
 // (n -- flag)
 // flag is true if and only if n is greater than zero.
 void _zero_greater(void) {
-  w = pop();
-  if (w > 0) push(TRUE);
-  else push(FALSE);
+  w = dStack_pop();
+  if (w > 0) dStack_push(TRUE);
+  else dStack_push(FALSE);
 }
 
 const char two_to_r_str[] = "2>r";
@@ -1826,10 +1836,10 @@ const char neq_str[] = "<>";
 // (x1 x2 -- flag)
 // flag is true if and only if x1 is not bit-for-bit the same as x2.
 void _neq(void) {
-  cell_t x2 = pop();
-  cell_t x1 = pop();
-  if (x1 != x2) push(TRUE);
-  else push(FALSE); 
+  cell_t x2 = dStack_pop();
+  cell_t x1 = dStack_pop();
+  if (x1 != x2) dStack_push(TRUE);
+  else dStack_push(FALSE); 
 }
 
 const char hex_str[] = "hex";
@@ -1848,8 +1858,8 @@ const char case_str[] = "case";
 // Run-time: ( -- )
 // Continue execution.
 static void _case(void) {
-  push(CASE_SYS);
-  push(0); // Count of of clauses
+  dStack_push(CASE_SYS);
+  dStack_push(0); // Count of of clauses
 }
 
 const char of_str[] = "of";
@@ -1864,16 +1874,16 @@ const char of_str[] = "of";
 // at the location specified by the consumer of of-sys, e.g., following the next ENDOF.
 // Otherwise, discard both values and continue execution in line.
 static void _of(void) {
-  push(pop() + 1);      // Increment count of of clauses
-  rPush(pop());         // Move to return stack
+  dStack_push(dStack_pop() + 1);      // Increment count of of clauses
+  rStack_push(dStack_pop());         // Move to return stack
 
-  push(OF_SYS);
+  dStack_push(OF_SYS);
   *pHere++ = OVER_IDX;  // Postpone over
   *pHere++ = EQUAL_IDX; // Postpone =
   *pHere++ = ZJUMP_IDX; // If
   *pHere = 0;           // Filled in by endof
-  push((size_t) pHere++);// Push address of jump address onto control stack
-  push(rPop());         // Bring of count back
+  dStack_push((size_t) pHere++);// Push address of jump address onto control stack
+  dStack_push(rStack_pop());         // Bring of count back
 }
 
 const char endof_str[] = "endof";
@@ -1889,24 +1899,24 @@ const char endof_str[] = "endof";
 static void _endof(void) {
   cell_t *back, *forward;
 
-  rPush(pop());         // Move of count to return stack
+  rStack_push(dStack_pop());         // Move of count to return stack
 
   // Prepare jump to endcase
   *pHere++ = JUMP_IDX;
   *pHere = 0;
   forward = pHere++;
 
-  back = (cell_t*) pop(); // Resolve If from of
+  back = (cell_t*) dStack_pop(); // Resolve If from of
   *back = (size_t) pHere - (size_t) back;
 
-  if (pop() != OF_SYS) { // Make sure control structure is consistent
-    push(-22);
+  if (dStack_pop() != OF_SYS) { // Make sure control structure is consistent
+    dStack_push(-22);
     _throw();
     return;
   }
   // Place forward jump address onto control stack
-  push((cell_t) forward);
-  push(rPop());          // Bring of count back
+  dStack_push((cell_t) forward);
+  dStack_push(rStack_pop());          // Bring of count back
 }
 
 const char endcase_str[] = "endcase";
@@ -1921,16 +1931,16 @@ static void _endcase(void) {
   cell_t *orig;
 
   // Resolve all of the jumps from of statements to here
-  int count = pop();
+  int count = dStack_pop();
   for (int i = 0; i < count; i++) {
-    orig = (cell_t *) pop();
+    orig = (cell_t *) dStack_pop();
     *orig = (size_t) pHere - (size_t) orig;
   }
 
   *pHere++ = DROP_IDX;      // Postpone drop of case selector
 
-  if (pop() != CASE_SYS) {  // Make sure control structure is consistent
-    push(-22);
+  if (dStack_pop() != CASE_SYS) {  // Make sure control structure is consistent
+    dStack_push(-22);
     _throw();
   }
 }
@@ -1953,7 +1963,7 @@ const char throw_str[] = "throw";
 // exception stack, along with everything on the return stack above that frame.
 // ...
 void _throw(void) {
-  errorCode = pop();
+  errorCode = dStack_pop();
   uint8_t index = 0;
   int tableCode;
   //_cr();
@@ -1969,7 +1979,8 @@ void _throw(void) {
     }
     index++;
   } while (tableCode);
-  tos = -1;                       // Clear the stack.
+//  dStack.tos = -1;                       // Clear the stack.
+  dStack_clear();                        // Clear the stack.
   _quit();
   state = FALSE;
 }  
@@ -1986,9 +1997,9 @@ const char key_question_str[] = "key?";
 void _key_question(void) {
     
     if( Serial.available() > 0) {
-        push(TRUE);
+        dStack_push(TRUE);
     } else {
-        push(FALSE);
+        dStack_push(FALSE);
     }
 }
 #endif
@@ -2012,10 +2023,13 @@ void _key_question(void) {
 const char dot_s_str[] = ".s";
 void _dot_s(void) {
   char i;
-  char depth = tos + 1;
-  if (tos >= 0) {
+//  char depth = dStack.tos + 1;
+  char depth = dStack_size();
+//  if (dStack.tos >= 0) {
+  if (depth > 0) {
     for (i = 0; i < depth ; i++) {
-      w = stack[i];
+//      w = dStack.data[i];
+      w = dStack_peek(i);
       displayValue();
     }
   }
@@ -2028,8 +2042,8 @@ const char dump_str[] = "dump";
 // DUMP may be implemented using pictured numeric output words. Consequently,
 // its use may corrupt the transient region identified by #>.
 void _dump(void) {
-  ucell_t len = (ucell_t)pop();
-  cell_t* addr_start = (cell_t*)pop();
+  ucell_t len = (ucell_t)dStack_pop();
+  cell_t* addr_start = (cell_t*)dStack_pop();
   cell_t* addr_end = addr_start;
   addr_end += len;
   addr_start = (cell_t*)(((size_t)addr_start >> 4) << 4);
@@ -2073,7 +2087,7 @@ void _see(void) {
   char flags = wordFlags;
   if (flags && IMMEDIATE)
     Serial.print("Immediate ");
-  cell_t xt = pop();
+  cell_t xt = dStack_pop();
   if (xt < 255) {
     Serial.print("Primitive Word");
   } else {
@@ -2106,7 +2120,7 @@ void _see(void) {
             Serial.print(*ptr++);
           } while (*ptr != 0);
           Serial.print("\x22");
-          addr = (cell_t *)++ptr;
+          addr = (cell_t *)ptr;
           ALIGN_P(addr);
           break;
       }
@@ -2171,15 +2185,15 @@ void _words(void) { // --
 #ifdef EN_EEPROM_OPS
 const char eeRead_str[] = "eeRead";
 void _eeprom_read(void) {             // address -- value
-  push(EEPROM.read(pop()));
+  dStack_push(EEPROM.read(dStack_pop()));
 }
 
 const char eeWrite_str[] = "eeWrite";
 void _eeprom_write(void) {             // value address --
   char address;
   char value;
-  address = (char) pop();
-  value = (char) pop();
+  address = (char) dStack_pop();
+  value = (char) dStack_pop();
   EEPROM.write(address, value);
 }
 #endif
@@ -2190,12 +2204,12 @@ void _eeprom_write(void) {             // value address --
 #ifdef EN_ARDUINO_OPS
 const char freeMem_str[] = "freeMem";
 void _freeMem(void) { 
-  push(freeMem());
+  dStack_push(freeMem());
 }
 
 const char delay_str[] = "delay";
 void _delay(void) {
-  delay(pop());
+  delay(dStack_pop());
 }
 
 const char pinWrite_str[] = "pinWrite";
@@ -2204,7 +2218,7 @@ const char pinWrite_str[] = "pinWrite";
 // u1 is the pin and u2 is the value ( 1 or 0 ). To turn the LED attached to
 // pin 13 on type "13 1 pinwrite" p.s. First change its pinMode to output
 void _pinWrite(void) {
-  digitalWrite(pop(), pop());
+  digitalWrite(dStack_pop(), dStack_pop());
 }
 
 const char pinMode_str[] = "pinMode";
@@ -2213,27 +2227,27 @@ const char pinMode_str[] = "pinMode";
 // u1 is the pin and u2 is the mode ( 1 or 0 ). To control the LED attached to
 // pin 13 to an output type "13 1 pinmode"
 void _pinMode(void) {
-  pinMode(pop(), pop());
+  pinMode(dStack_pop(), dStack_pop());
 }
 
 const char pinRead_str[] = "pinRead";
 void _pinRead(void) {
-  push(digitalRead(pop()));
+  dStack_push(digitalRead(dStack_pop()));
 }
 
 const char analogRead_str[] = "analogRead";
 void _analogRead(void) {
-  push(analogRead(pop()));
+  dStack_push(analogRead(dStack_pop()));
 }
 
 const char analogWrite_str[] = "analogWrite";
 void _analogWrite(void) {
-  analogWrite(pop(), pop());
+  analogWrite(dStack_pop(), dStack_pop());
 }
 
 const char to_name_str[] = ">name";
 void _toName(void) {
-  xtToName(pop());
+  xtToName(dStack_pop());
 }
 #endif
 
